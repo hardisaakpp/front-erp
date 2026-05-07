@@ -8,7 +8,7 @@ Este proyecto se despliega en `192.168.2.39` y **no reemplaza** el entorno actua
 docker compose up -d --build
 ```
 
-Esto levanta el frontend en `localhost:8080` dentro del servidor.
+Esto levanta el frontend en `localhost:8081` dentro del servidor (puerto por defecto actual).
 
 ## 2) Nginx host (servidor 192.168.2.39)
 
