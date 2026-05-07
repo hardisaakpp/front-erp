@@ -4,11 +4,21 @@ services:
     container_name: scnexus-front-dev
     working_dir: /app
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 3000"
+    environment:
+      # Dev must use Vite proxy (no nginx in front).
+      # These defaults work when backend services run on host machine.
+      VITE_ARTICULO_SCAN_PROXY_TARGET: ${VITE_ARTICULO_SCAN_PROXY_TARGET:-http://host.docker.internal:8080}
+      VITE_PYG_PROXY_TARGET: ${VITE_PYG_PROXY_TARGET:-http://host.docker.internal:5171}
+      VITE_MBA3_PROXY_TARGET: ${VITE_MBA3_PROXY_TARGET:-http://192.168.2.153:8000}
+      VITE_AUTH_ME_PROXY_TARGET: ${VITE_AUTH_ME_PROXY_TARGET:-http://192.168.2.12:8080}
+      VITE_CORE_PROXY_TARGET: ${VITE_CORE_PROXY_TARGET:-http://192.168.2.12:8080}
     ports:
       - "3000:3000"
     volumes:
       - .:/app
       - scnexus-front-node-modules:/app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
 volumes:

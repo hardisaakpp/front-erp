@@ -215,10 +215,10 @@ docker run --rm -p 8080:80 scnexus-front:latest
 Tambien puedes usar Compose:
 
 ```bash
-# Produccion local (runtime nginx)
+# Produccion/local runtime (nginx, imagen final)
 docker compose up -d --build
 
-# Desarrollo con hot reload (Vite)
+# Desarrollo (Vite + proxy, sin nginx)
 docker compose -f docker-compose.dev.yml up -d
 ```
 
@@ -234,6 +234,13 @@ En PowerShell:
 $env:SCNEXUS_FRONT_PORT=8090
 docker compose up -d --build
 ```
+
+### Regla recomendada por entorno
+
+- **Desarrollo:** usar `docker-compose.dev.yml` (Vite en `http://localhost:3000`), sin Nginx.
+- **Produccion/preproduccion:** usar imagen final con Nginx (`docker compose up -d --build` o despliegue en servidor).
+
+Si en desarrollo ves errores tipo *"HTML en lugar de JSON"*, normalmente estas levantando el runtime de Nginx (`:8081`) en lugar del dev server de Vite (`:3000`).
 
 ### Estrategia recomendada de despliegue en produccion
 
