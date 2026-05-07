@@ -1,0 +1,10 @@
+services:
+  scnexus-front:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: scnexus-front:latest
+    container_name: scnexus-front
+    ports:
+      - "${SCNEXUS_FRONT_PORT:-8081}:80"
+    restart: unless-stopped

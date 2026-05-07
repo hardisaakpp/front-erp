@@ -195,6 +195,68 @@ npm run build
 # Los archivos compilados estarán en /dist
 ```
 
+### Docker (imagen unica con multi-stage build)
+
+El proyecto incluye `Dockerfile` multi-stage:
+
+- **Stage build (Node):** instala dependencias y ejecuta `npm run build`
+- **Stage runtime (Nginx):** sirve solo `dist` con fallback SPA
+
+Comandos:
+
+```bash
+# Construir imagen
+docker build -t scnexus-front:latest .
+
+# Ejecutar contenedor
+docker run --rm -p 8080:80 scnexus-front:latest
+```
+
+Tambien puedes usar Compose:
+
+```bash
+# Produccion local (runtime nginx)
+docker compose up -d --build
+
+# Desarrollo con hot reload (Vite)
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Por defecto el contenedor publica en `8081`. Si necesitas otro puerto:
+
+```bash
+SCNEXUS_FRONT_PORT=8090 docker compose up -d --build
+```
+
+En PowerShell:
+
+```powershell
+$env:SCNEXUS_FRONT_PORT=8090
+docker compose up -d --build
+```
+
+### Estrategia recomendada de despliegue en produccion
+
+Para minimizar riesgo, mantener el `nginx` actual del servidor (por ejemplo `deploy/nginx/scnexus.conf.example`) y usar Docker para estandarizar build/runtime del frontend:
+
+1. Construir la imagen Docker en CI/CD o en servidor.
+2. Extraer/publicar `dist` o levantar el contenedor de frontend en un puerto interno.
+3. Mantener en `nginx` productivo las reglas de proxy existentes (`/api`, `/scan-api`, `/uploads`, SSE, etc.).
+4. Validar rutas criticas y fallback SPA antes de liberar.
+
+> Nota: si migras todo el runtime a contenedor, evita usar `127.0.0.1` en `proxy_pass` para servicios externos al contenedor. En Docker, `127.0.0.1` apunta al mismo contenedor.
+
+### Contexto actual de servidores
+
+- `192.168.2.153`: entorno actual en produccion (no reemplazar con este proyecto).
+- `192.168.2.39`: servidor de aplicaciones publicas donde se desplegara esta version dockerizada.
+
+Recomendacion operativa:
+
+1. Mantener configuraciones y artefactos separados por servidor.
+2. No reutilizar el mismo `server_name`, puertos ni rutas de despliegue entre `153` y `39`.
+3. Publicar este frontend en `192.168.2.39` como sitio independiente (con su propio bloque `server` en Nginx o virtual host equivalente).
+
 ### Variables de Entorno
 
 Configurar en `.env.production`:

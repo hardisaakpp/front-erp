@@ -1,0 +1,15 @@
+services:
+  scnexus-front-dev:
+    image: node:20-alpine
+    container_name: scnexus-front-dev
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - scnexus-front-node-modules:/app/node_modules
+    restart: unless-stopped
+
+volumes:
+  scnexus-front-node-modules:
