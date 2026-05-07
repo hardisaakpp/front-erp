@@ -208,8 +208,8 @@ Comandos:
 # Construir imagen
 docker build -t scnexus-front:latest .
 
-# Ejecutar contenedor
-docker run --rm -p 8080:80 scnexus-front:latest
+# Ejecutar contenedor (puerto 8081 en el host, 80 en el contenedor)
+docker run --rm -p 8081:80 scnexus-front:latest
 ```
 
 Tambien puedes usar Compose:
@@ -257,6 +257,8 @@ Para minimizar riesgo, mantener el `nginx` actual del servidor (por ejemplo `dep
 
 - `192.168.2.153`: entorno actual en produccion (no reemplazar con este proyecto).
 - `192.168.2.39`: servidor de aplicaciones publicas donde se desplegara esta version dockerizada.
+
+**Runbook paso a paso (clone, Docker, Apache en :3002, validacion):** [deploy/DEPLOY_PUBLIC_39.md](deploy/DEPLOY_PUBLIC_39.md)
 
 Recomendacion operativa:
 
