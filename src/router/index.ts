@@ -30,6 +30,10 @@ const router = createRouter({
       component: LoginView
     },
     {
+      path: '/checkin/index.php',
+      redirect: '/articulo-scaner'
+    },
+    {
       path: '/',
       component: MainLayout,
       children: [

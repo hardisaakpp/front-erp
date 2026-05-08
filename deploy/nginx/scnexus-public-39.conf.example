@@ -1,6 +1,18 @@
 server {
-    listen 3002;
-    server_name 192.168.2.39;
+    listen 80;
+    server_name codigoqr.mabelgroup.com.ec;
+
+    # Redirigir todo HTTP a HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name codigoqr.mabelgroup.com.ec;
+
+    # Certificados SSL (ajustar rutas segun el servidor)
+    ssl_certificate /etc/letsencrypt/live/codigoqr.mabelgroup.com.ec/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/codigoqr.mabelgroup.com.ec/privkey.pem;
 
     # Opcion A: servir dist directamente en host
     # root /storage/scnexus-front-public/dist;
