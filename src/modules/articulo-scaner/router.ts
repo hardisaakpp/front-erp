@@ -5,7 +5,6 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/articulo-scaner',
     name: 'articulo-scaner',
-    alias: ['/checkin', '/checkin/index.php'],
     component: () => import('./views/ArticuloScanerView.vue'),
     meta: {
       requiresAuth: true,

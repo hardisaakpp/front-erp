@@ -18,6 +18,13 @@ server {
     # root /storage/scnexus-front-public/dist;
     # index index.html;
 
+    # QR legado PHP: excluir del proxy a la SPA (ajustar root/php-fpm segun el servidor).
+    # location ^~ /checkin/ {
+    #     alias /var/www/codigoqr-legacy/checkin/;
+    #     index index.php;
+    #     location ~ \.php$ { include snippets/fastcgi-php.conf; fastcgi_pass unix:/run/php/php-fpm.sock; }
+    # }
+
     # Opcion B (recomendada con Docker): frontend en contenedor
     location / {
         proxy_pass http://127.0.0.1:8080;

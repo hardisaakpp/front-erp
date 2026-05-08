@@ -208,7 +208,7 @@ Desde cualquier cliente con acceso DNS:
 - Probar login.
 - Probar ruta SPA directa (por ejemplo `/dashboard`) sin 404.
 - Revisar en DevTools que `/api/*`, `/scan-api/*`, etc. respondan JSON (no HTML del index).
-- Probar enlace legado QR: `https://codigoqr.mabelgroup.com.ec/checkin/index.php?MG$=ABC288096&809ID=465` (debe redirigir a `/articulo-scaner`).
+- Probar enlace legado QR: `https://codigoqr.mabelgroup.com.ec/checkin/index.php?MG$=ABC288096&809ID=465` (debe ejecutar el PHP historico; en Apache usar `ProxyPass /checkin !` antes del proxy al contenedor, ver `deploy/apache/scnexus-public-39-https.conf.example`).
 
 ---
 

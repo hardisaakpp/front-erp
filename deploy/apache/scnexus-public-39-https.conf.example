@@ -18,15 +18,16 @@
     ProxyPreserveHost On
     ProxyRequests Off
 
+    # QR legado en PHP: no enviar /checkin al contenedor SPA (debe ir ANTES de ProxyPass /).
+    # Descomentar y definir DocumentRoot/Alias del vhost para los archivos PHP reales.
+    # ProxyPass /checkin !
+
     # Frontend SPA servido por el contenedor (Nginx interno en 127.0.0.1:8081)
     ProxyPass        / http://127.0.0.1:8081/
     ProxyPassReverse / http://127.0.0.1:8081/
 
     # Mantener protocolo original para backends que validan esquema
     RequestHeader set X-Forwarded-Proto "https"
-
-    # Compatibilidad legacy se resuelve en Vue Router (alias de ruta),
-    # para evitar redirecciones HTTP y conservar la URL original.
 
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-Content-Type-Options "nosniff"
