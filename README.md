@@ -258,7 +258,7 @@ Para minimizar riesgo, mantener el `nginx` actual del servidor (por ejemplo `dep
 - `192.168.2.153`: entorno actual en produccion (no reemplazar con este proyecto).
 - `192.168.2.39`: servidor de aplicaciones publicas donde se desplegara esta version dockerizada.
 
-**Runbook paso a paso (clone, Docker, Apache en :3002, validacion):** [deploy/DEPLOY_PUBLIC_39.md](deploy/DEPLOY_PUBLIC_39.md)
+**Runbook paso a paso (clone, Docker, Apache + HTTPS por dominio, validacion):** [deploy/DEPLOY_PUBLIC_39.md](deploy/DEPLOY_PUBLIC_39.md)
 
 Recomendacion operativa:
 

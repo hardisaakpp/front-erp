@@ -1,0 +1,35 @@
+<VirtualHost *:80>
+    ServerName codigoqr.mabelgroup.com.ec
+
+    RewriteEngine On
+    RewriteRule ^ https://codigoqr.mabelgroup.com.ec%{REQUEST_URI} [L,R=301,NE]
+</VirtualHost>
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+    ServerName codigoqr.mabelgroup.com.ec
+
+    SSLEngine on
+    # Reutiliza el wildcard/certificado corporativo ya instalado en el servidor.
+    SSLCertificateFile /etc/ssl/certs/server.crt
+    SSLCertificateKeyFile /etc/ssl/private/server.key
+    SSLCertificateChainFile /etc/ssl/certs/bundle.crt
+
+    ProxyPreserveHost On
+    ProxyRequests Off
+
+    # Frontend SPA servido por el contenedor (Nginx interno en 127.0.0.1:8081)
+    ProxyPass        / http://127.0.0.1:8081/
+    ProxyPassReverse / http://127.0.0.1:8081/
+
+    # Mantener protocolo original para backends que validan esquema
+    RequestHeader set X-Forwarded-Proto "https"
+
+    # Compatibilidad legacy se resuelve en Vue Router (alias de ruta),
+    # para evitar redirecciones HTTP y conservar la URL original.
+
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+</VirtualHost>
+</IfModule>

@@ -2,18 +2,19 @@
 
 Este documento resume el procedimiento validado para publicar el frontend SCNexus en el servidor **`192.168.2.39`**. Ese entorno es **independiente** del de produccion actual en **`192.168.2.153`** (no se reemplaza el sitio existente alli).
 
-## Arquitectura resumida
+## Arquitectura resumida (actual con dominio HTTPS)
 
 ```text
 Cliente (navegador)
-    -> http://192.168.2.39:3002
-        -> Apache (reverse proxy)
+    -> https://codigoqr.mabelgroup.com.ec
+        -> Apache (reverse proxy + TLS)
             -> http://127.0.0.1:8081
                 -> Contenedor Docker (imagen scnexus-front)
                     -> Nginx interno sirve dist (SPA + proxies API en scnexus-spa.conf)
 ```
 
-- **Puerto publico:** `3002` (Apache).
+- **Dominio publico:** `codigoqr.mabelgroup.com.ec`.
+- **Puertos publicos:** `80/443` (Apache).
 - **Puerto interno del contenedor en el host:** `8081` -> `80` dentro del contenedor (ver `docker-compose.yml`, variable `SCNEXUS_FRONT_PORT` por defecto `8081`).
 - **Codigo en servidor:** recomendado bajo `/storage/scnexus-front`.
 - **Rama:** `frontend-dockerizado` (o la rama acordada para releases).
@@ -102,41 +103,35 @@ SCNEXUS_FRONT_PORT=8090 docker compose up -d --build
 
 ---
 
-## 4) Apache: exponer el sitio en el puerto 3002
+## 4) Apache: exponer el sitio en dominio HTTPS
 
 ### 4.1 Habilitar modulos
 
 ```bash
-a2enmod proxy proxy_http headers
+a2enmod proxy proxy_http headers rewrite ssl
 systemctl restart apache2
 ```
 
 (`restart` asegura que carguen modulos nuevos; luego se puede usar `reload` para cambios de config.)
 
-### 4.2 Escuchar en 3002
+### 4.2 Escuchar en 80/443
 
-Si `grep -R "Listen " /etc/apache2/` no muestra `3002`, anadir en `/etc/apache2/ports.conf`:
+Si `grep -R "Listen " /etc/apache2/` no muestra `80` y `443`, anadir en `/etc/apache2/ports.conf`:
 
 ```apache
-Listen 3002
+Listen 80
+Listen 443
 ```
 
-### 4.3 VirtualHost
+### 4.3 VirtualHost + SSL
 
-Crear `/etc/apache2/sites-available/scnexus-front-public.conf`:
+Copiar la plantilla del repo a `/etc/apache2/sites-available/scnexus-front-public.conf`:
+
+`deploy/apache/scnexus-public-39-https.conf.example`
 
 ```apache
-<VirtualHost *:3002>
-    ServerName 192.168.2.39
-
-    ProxyPreserveHost On
-    ProxyRequests Off
-
-    ProxyPass        / http://127.0.0.1:8081/
-    ProxyPassReverse / http://127.0.0.1:8081/
-
-    RequestHeader set X-Forwarded-Proto "http"
-</VirtualHost>
+cp /storage/scnexus-front/deploy/apache/scnexus-public-39-https.conf.example \
+  /etc/apache2/sites-available/scnexus-front-public.conf
 ```
 
 Habilitar y validar:
@@ -147,7 +142,33 @@ apachectl configtest
 systemctl reload apache2
 ```
 
-### 4.4 Aviso AH00558 (opcional, cosmético)
+### 4.4 Certificado SSL (reusar wildcard existente)
+
+Si el servidor ya tiene certificado corporativo (p. ej. wildcard `*.mabelgroup.com.ec`), usar rutas como:
+
+```apache
+SSLCertificateFile /etc/ssl/certs/server.crt
+SSLCertificateKeyFile /etc/ssl/private/server.key
+SSLCertificateChainFile /etc/ssl/certs/bundle.crt
+```
+
+Puedes validar que el sitio activo actual (`sitio.conf`) usa esas rutas antes de habilitar el nuevo vhost.
+
+### 4.5 Let's Encrypt (alternativa, solo si no existe certificado corporativo)
+
+```bash
+apt-get install -y certbot python3-certbot-apache
+certbot --apache -d codigoqr.mabelgroup.com.ec
+```
+
+Luego validar:
+
+```bash
+apachectl configtest
+systemctl reload apache2
+```
+
+### 4.6 Aviso AH00558 (opcional, cosmético)
 
 Si aparece `Could not reliably determine the server's fully qualified domain name`, anadir en `/etc/apache2/apache2.conf` (o conf habilitado):
 
@@ -164,7 +185,8 @@ y `systemctl reload apache2`.
 Si usas UFW:
 
 ```bash
-ufw allow 3002/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
 ufw status
 ```
 
@@ -175,16 +197,18 @@ ufw status
 En el servidor:
 
 ```bash
-curl -I http://127.0.0.1:3002
-ss -ltnp | grep ':3002 '
+curl -I http://127.0.0.1:8081
+curl -I https://codigoqr.mabelgroup.com.ec
+ss -ltnp | grep -E ':80 |:443 '
 ```
 
-Desde la red interna:
+Desde cualquier cliente con acceso DNS:
 
-- Abrir `http://192.168.2.39:3002`.
+- Abrir `https://codigoqr.mabelgroup.com.ec`.
 - Probar login.
 - Probar ruta SPA directa (por ejemplo `/dashboard`) sin 404.
 - Revisar en DevTools que `/api/*`, `/scan-api/*`, etc. respondan JSON (no HTML del index).
+- Probar enlace legado QR: `https://codigoqr.mabelgroup.com.ec/checkin/index.php?MG$=ABC288096&809ID=465` (debe redirigir a `/articulo-scaner`).
 
 ---
 
@@ -242,5 +266,5 @@ Los avisos `Packages ... configurado varias veces` no impidieron el despliegue d
 ```bash
 cd /storage/scnexus-front && git pull && docker compose up -d --build
 curl -I http://127.0.0.1:8081
-curl -I http://127.0.0.1:3002
+curl -I https://codigoqr.mabelgroup.com.ec
 ```
