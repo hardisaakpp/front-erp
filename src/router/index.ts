@@ -21,8 +21,12 @@ import articuloScanerRoutes from '../modules/articulo-scaner/router'
 console.log('🔍 DEBUG usuariosRoutes:', usuariosRoutes)
 console.log('🔍 DEBUG cajaChicaRoutes:', cajaChicaRoutes)
 
+const rawAppBasePath = import.meta.env.VITE_APP_BASE_PATH || '/'
+const normalizedAppBasePath = rawAppBasePath.startsWith('/') ? rawAppBasePath : `/${rawAppBasePath}`
+const appBasePath = normalizedAppBasePath.endsWith('/') ? normalizedAppBasePath : `${normalizedAppBasePath}/`
+
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(appBasePath),
   routes: [
     {
       path: '/login',

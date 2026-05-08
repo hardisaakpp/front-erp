@@ -18,9 +18,22 @@
     ProxyPreserveHost On
     ProxyRequests Off
 
-    # QR legado en PHP: no enviar /checkin al contenedor SPA (debe ir ANTES de ProxyPass /).
-    # Descomentar y definir DocumentRoot/Alias del vhost para los archivos PHP reales.
-    # ProxyPass /checkin !
+    # --- Legado PHP (/checkin) ---
+    # IMPORTANTE: estas reglas deben ir ANTES de ProxyPass / para que no lo capture la SPA.
+    # 1) Excluir /checkin del proxy al contenedor:
+    ProxyPass /checkin !
+    # 2) Publicar carpeta legacy en el host (ajustar ruta real):
+    Alias /checkin /var/www/codigoqr-legacy/checkin
+    <Directory /var/www/codigoqr-legacy/checkin>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    # 3) Asegurar ejecución PHP en ese path (mod_php o php-fpm según el servidor).
+    #    Ejemplo php-fpm:
+    # <FilesMatch \.php$>
+    #     SetHandler "proxy:unix:/run/php/php8.2-fpm.sock|fcgi://localhost"
+    # </FilesMatch>
 
     # Frontend SPA servido por el contenedor (Nginx interno en 127.0.0.1:8081)
     ProxyPass        / http://127.0.0.1:8081/

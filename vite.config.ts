@@ -5,6 +5,9 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const rawAppBasePath = env.VITE_APP_BASE_PATH || '/'
+  const normalizedAppBasePath = rawAppBasePath.startsWith('/') ? rawAppBasePath : `/${rawAppBasePath}`
+  const appBasePath = normalizedAppBasePath.endsWith('/') ? normalizedAppBasePath : `${normalizedAppBasePath}/`
   const coreProxyTarget = env.VITE_CORE_PROXY_TARGET || 'http://localhost:5053'
   const mba3ProxyTarget = env.VITE_MBA3_PROXY_TARGET || 'http://localhost:8000'
   const authMeProxyTarget = env.VITE_AUTH_ME_PROXY_TARGET || mba3ProxyTarget
@@ -22,6 +25,7 @@ export default defineConfig(({ mode }) => {
   const pygProxyPrefix = 'VITE_PYG_PROXY_PREFIX' in env ? env.VITE_PYG_PROXY_PREFIX : '/api'
 
   return {
+    base: appBasePath,
     plugins: [vue()],
     resolve: {
       alias: {
