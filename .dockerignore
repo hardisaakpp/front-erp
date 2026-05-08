@@ -1,5 +1,12 @@
 node_modules
 dist
+# Evita que un .env del servidor (build) anule ARG/ENV del Dockerfile en loadEnv();
+# VITE_* sigue disponible vía ENV en el stage de build.
+.env
+.env.local
+.env.production
+.env.production.local
+.env.development.local
 .git
 .gitignore
 .vscode
