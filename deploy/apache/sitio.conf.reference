@@ -1,0 +1,70 @@
+<VirtualHost *:80>
+        # The ServerName directive sets the request scheme, hostname and port that
+        # the server uses to identify itself. This is used when creating
+        # redirection URLs. In the context of virtual hosts, the ServerName
+        # specifies what hostname must appear in the request's Host: header to
+        # match this virtual host. For the default virtual host (this file) this
+        # value is not decisive as it is used as a last resort host regardless.
+        # However, you must set it for any further virtual host explicitly.
+        #ServerName www.example.com
+
+        ServerAdmin acolumba@mabeltrading.com.ec
+        DocumentRoot /storage
+        <Directory /storage>
+                Require all granted
+        </Directory>
+
+        ServerName sapp
+        Redirect / https://192.168.2.39/
+
+        # Available loglevels: trace8, ..., trace1, debug, info, notice, warn,
+        # error, crit, alert, emerg.
+        # It is also possible to configure the loglevel for particular
+        # modules, e.g.
+        #LogLevel info ssl:warn
+
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+        # For most configuration files from conf-available/, which are
+        # enabled or disabled at a global level, it is possible to
+        # include a line for only one particular virtual host. For example the
+        # following line enables the CGI configuration for this host only
+        # after it has been globally disabled with "a2disconf".
+        #Include conf-available/serve-cgi-bin.conf
+</VirtualHost>
+
+<VirtualHost *:443>
+   ServerName sapp
+   DocumentRoot /storage
+
+  <Directory /storage>
+        Require all granted
+  </Directory>
+
+   SSLEngine on
+   SSLCertificateFile /etc/ssl/certs/server.crt
+   SSLCertificateKeyFile /etc/ssl/private/server.key
+   SSLCertificateChainFile /etc/ssl/certs/bundle.crt
+
+   # --- SCNexus (nuevo) bajo subruta, sin romper sitios legacy ---
+   # Requiere build de SCNexus con:
+   # VITE_APP_BASE_PATH=/articulo-scaner/
+   ProxyPreserveHost On
+   ProxyRequests Off
+
+   # Redirige /articulo-scaner (sin slash final) a /articulo-scaner/
+   RedirectMatch 302 ^/articulo-scaner$ /articulo-scaner/
+
+   # Frontend SCNexus servido por contenedor Docker (nginx interno en 127.0.0.1:8081).
+   # Usar prefijo sin slash final para cubrir también recargas en subrutas internas.
+   ProxyPass        /articulo-scaner http://127.0.0.1:8081/articulo-scaner retry=0
+   ProxyPassReverse /articulo-scaner http://127.0.0.1:8081/articulo-scaner
+
+   # APIs mínimas necesarias para Articulo Scaner (incluye login del front).
+   # Nota: se enruta al contenedor; el Nginx interno aplica el proxy final al backend.
+   ProxyPass        /api/             http://127.0.0.1:8081/api/
+   ProxyPassReverse /api/             http://127.0.0.1:8081/api/
+   ProxyPass        /scan-api/        http://127.0.0.1:8081/scan-api/
+   ProxyPassReverse /scan-api/        http://127.0.0.1:8081/scan-api/
+</VirtualHost>

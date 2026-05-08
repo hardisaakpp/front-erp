@@ -1,23 +1,31 @@
 # Despliegue en servidor publico 192.168.2.39 (runbook)
 
-Este documento resume el procedimiento validado para publicar el frontend SCNexus en el servidor **`192.168.2.39`**. Ese entorno es **independiente** del de produccion actual en **`192.168.2.153`** (no se reemplaza el sitio existente alli).
+Este documento deja el procedimiento final validado para publicar SCNexus en `192.168.2.39` **sin romper** los sitios legacy ya operativos en el mismo dominio.
 
-## Arquitectura resumida (actual con dominio HTTPS)
+## Resultado objetivo (validado)
+
+- Mantener operativos:
+  - `https://codigoqr.mabelgroup.com.ec/sc24/`
+  - `https://codigoqr.mabelgroup.com.ec/checkin/mns_check.php`
+- Publicar SCNexus en subruta dedicada:
+  - `https://codigoqr.mabelgroup.com.ec/articulo-scaner/`
+- Evitar capturar todo el dominio con `ProxyPass /` desde un vhost nuevo.
+
+## Arquitectura final recomendada
 
 ```text
 Cliente (navegador)
     -> https://codigoqr.mabelgroup.com.ec
-        -> Apache (reverse proxy + TLS)
-            -> http://127.0.0.1:8081
-                -> Contenedor Docker (imagen scnexus-front)
-                    -> Nginx interno sirve dist (SPA + proxies API en scnexus-spa.conf)
+        -> Apache vhost existente (sitio.conf, DocumentRoot /storage)
+            -> /sc24/*      (legacy en /storage/sc24)
+            -> /checkin/*   (legacy en /storage/checkin)
+            -> /articulo-scaner/*  (proxy al contenedor SCNexus en 127.0.0.1:8081)
 ```
 
 - **Dominio publico:** `codigoqr.mabelgroup.com.ec`.
 - **Puertos publicos:** `80/443` (Apache).
-- **Puerto interno del contenedor en el host:** `8081` -> `80` dentro del contenedor (ver `docker-compose.yml`, variable `SCNEXUS_FRONT_PORT` por defecto `8081`).
-- **Codigo en servidor:** recomendado bajo `/storage/scnexus-front`.
-- **Rama:** `frontend-dockerizado` (o la rama acordada para releases).
+- **Contenedor SCNexus:** `127.0.0.1:8081 -> 80`.
+- **Vhost base recomendado:** `sitio.conf` (no crear otro vhost para el mismo dominio salvo necesidad muy justificada).
 
 ---
 
@@ -79,6 +87,39 @@ Si tu distro no tiene suite en `download.docker.com` para ese `VERSION_CODENAME`
 
 ## 3) Levantar el frontend con Compose
 
+### Base path `/articulo-scaner/` en el mismo dominio (legacy + SPA)
+
+`.env.production` esta **en `.gitignore`**: despues de `git pull` el servidor suele construir sin esas vars. El Dockerfile ahora admite **`VITE_APP_BASE_PATH` como build-arg** desde `docker-compose.yml`.
+
+Creá en **`/storage/scnexus-front/.env`** (junto al `compose`, no commiteado) al menos:
+
+```env
+VITE_APP_BASE_PATH=/articulo-scaner/
+```
+
+Opcional: copiá el resto de variables de `.env.production.example` ahí mismo o mantené un `.env.production` solo en servidor; el build-arg vuelve a exportar **`VITE_APP_BASE_PATH`** dentro de la imagen antes de `npm run build`.
+
+Construcción y arranque (recomendado forzar rebuild del stage de build tras cambiar base path):
+
+```bash
+cd /storage/scnexus-front
+docker compose build --no-cache
+docker compose up -d
+docker compose ps
+```
+
+Comprobar dentro del contenedor que el bundle salió bajo subruta (debe existir la carpeta y los `src`/ `href` con `/articulo-scaner/assets/`):
+
+```bash
+docker exec scnexus-front ls -la /usr/share/nginx/html/
+# Vite deposita index.html y assets/ en la raíz; el prefijo /articulo-scaner/ solo va en URLs del HTML.
+docker exec scnexus-front grep -Eo 'src="/articulo-scaner/[^"]+"' /usr/share/nginx/html/index.html | head
+```
+
+### Despliegue en raíz del contenedor (sin subruta)
+
+Si no necesitás subruta, omití `VITE_APP_BASE_PATH` en `.env` o usá `/` explicito (`VITE_APP_BASE_PATH=/`).
+
 ```bash
 cd /storage/scnexus-front
 docker compose up -d --build
@@ -103,7 +144,9 @@ SCNEXUS_FRONT_PORT=8090 docker compose up -d --build
 
 ---
 
-## 4) Apache: exponer el sitio en dominio HTTPS
+## 4) Apache: integrar SCNexus sin romper legacy
+
+> Procedimiento final: editar el vhost existente `sitio.conf` para mantener `sc24`/`checkin` y agregar solo `/articulo-scaner/` al contenedor.
 
 ### 4.1 Habilitar modulos
 
@@ -123,26 +166,46 @@ Listen 80
 Listen 443
 ```
 
-### 4.3 VirtualHost + SSL
+### 4.3 Editar `sitio.conf` (vhost existente)
 
-Copiar la plantilla del repo a `/etc/apache2/sites-available/scnexus-front-public.conf`:
-
-`deploy/apache/scnexus-public-39-https.conf.example`
-
-```apache
-cp /storage/scnexus-front/deploy/apache/scnexus-public-39-https.conf.example \
-  /etc/apache2/sites-available/scnexus-front-public.conf
-```
-
-Habilitar y validar:
+Abrir:
 
 ```bash
-a2ensite scnexus-front-public.conf
-apachectl configtest
-systemctl reload apache2
+sudo nano /etc/apache2/sites-available/sitio.conf
 ```
 
-### 4.4 Certificado SSL (reusar wildcard existente)
+En el bloque `<VirtualHost *:443>`, mantener `DocumentRoot /storage` (legacy) y agregar:
+
+```apache
+# --- SCNexus bajo subruta ---
+ProxyPreserveHost On
+ProxyRequests Off
+
+# Normalizar sin slash final
+RedirectMatch 302 ^/articulo-scaner$ /articulo-scaner/
+
+# Enviar solo la subruta al contenedor (no usar ProxyPass /)
+ProxyPass        /articulo-scaner/ http://127.0.0.1:8081/articulo-scaner/
+ProxyPassReverse /articulo-scaner/ http://127.0.0.1:8081/articulo-scaner/
+```
+
+Aplicar:
+
+```bash
+sudo apachectl configtest
+sudo systemctl reload apache2
+```
+
+### 4.4 Referencia del vhost actual
+
+Para dejar trazabilidad en el repo:
+
+- Referencia capturada: `deploy/apache/sitio.conf.reference`
+- Plantilla standalone (vhost dedicado): `deploy/apache/scnexus-public-39-https.conf.example`
+
+Para este servidor, la opción preferida es la primera (coexistencia en `sitio.conf`).
+
+### 4.5 Certificado SSL (reusar wildcard existente)
 
 Si el servidor ya tiene certificado corporativo (p. ej. wildcard `*.mabelgroup.com.ec`), usar rutas como:
 
@@ -154,7 +217,7 @@ SSLCertificateChainFile /etc/ssl/certs/bundle.crt
 
 Puedes validar que el sitio activo actual (`sitio.conf`) usa esas rutas antes de habilitar el nuevo vhost.
 
-### 4.5 Let's Encrypt (alternativa, solo si no existe certificado corporativo)
+### 4.6 Let's Encrypt (alternativa, solo si no existe certificado corporativo)
 
 ```bash
 apt-get install -y certbot python3-certbot-apache
@@ -168,7 +231,7 @@ apachectl configtest
 systemctl reload apache2
 ```
 
-### 4.6 Aviso AH00558 (opcional, cosmético)
+### 4.7 Aviso AH00558 (opcional, cosmético)
 
 Si aparece `Could not reliably determine the server's fully qualified domain name`, anadir en `/etc/apache2/apache2.conf` (o conf habilitado):
 
@@ -205,10 +268,12 @@ ss -ltnp | grep -E ':80 |:443 '
 Desde cualquier cliente con acceso DNS:
 
 - Abrir `https://codigoqr.mabelgroup.com.ec`.
-- Probar login.
-- Probar ruta SPA directa (por ejemplo `/dashboard`) sin 404.
-- Revisar en DevTools que `/api/*`, `/scan-api/*`, etc. respondan JSON (no HTML del index).
-- Probar enlace legado QR: `https://codigoqr.mabelgroup.com.ec/checkin/index.php?MG$=ABC288096&809ID=465` (debe ejecutar el PHP historico; en Apache usar `ProxyPass /checkin !` antes del proxy al contenedor, ver `deploy/apache/scnexus-public-39-https.conf.example`).
+- Probar legacy:
+  - `https://codigoqr.mabelgroup.com.ec/sc24/`
+  - `https://codigoqr.mabelgroup.com.ec/checkin/mns_check.php`
+- Probar SCNexus:
+  - `https://codigoqr.mabelgroup.com.ec/articulo-scaner/`
+- Revisar en DevTools que SCNexus consulte APIs correctamente (`/api/*`, `/scan-api/*`, etc.).
 
 ---
 
@@ -216,7 +281,9 @@ Desde cualquier cliente con acceso DNS:
 
 ```bash
 cd /storage/scnexus-front
-git pull
+git fetch origin
+git checkout frontend-dockerizado
+git pull --ff-only origin frontend-dockerizado
 docker compose up -d --build
 ```
 
@@ -242,6 +309,41 @@ docker compose up -d --build
 
 ## 9) Notas y referencias
 
+### Ajuste obligatorio de build para subruta
+
+SCNexus debe construirse con base path de subruta para convivir en el mismo dominio legacy:
+
+```env
+VITE_APP_BASE_PATH=/articulo-scaner/
+```
+
+Esta variable ya está soportada en:
+
+- `vite.config.ts` (propiedad `base`)
+- `src/router/index.ts` (`createWebHistory(appBasePath)`)
+
+Sin ese ajuste, la SPA intentará cargar assets desde `/assets/*` (raíz) y puede colisionar con sitios legacy.
+
+### Lección aprendida sobre rutas legacy
+
+- Alias de Vue Router como `/checkin` o `/checkin/index.php` para apuntar a `articulo-scaner` reemplazan el flujo PHP legacy.
+- Para conservar `checkin` histórico, no usar esos alias ni `ProxyPass /` global que capture todo el dominio.
+
+### Lección aprendida sobre remotos Git
+
+Se detectó desalineación por usar remotos distintos entre local y servidor:
+
+- Local: `https://github.com/alextz111/scnexus-front.git`
+- Servidor: `git@github-cortiz:hardisaakpp/scnexus-front.git`
+
+Validar siempre antes de desplegar:
+
+```bash
+git remote -v
+git rev-parse --short HEAD
+git show --name-only --oneline HEAD
+```
+
 ### Nginx en el contenedor vs Apache en el host
 
 El `Dockerfile` copia `deploy/nginx/scnexus-spa.conf` al contenedor. Ese archivo incluye proxies a backends internos (IPs de red corporativa). Si en `39` las APIs no son alcanzables desde la red Docker, apareceran `502` en ciertas rutas: hay que alinear IPs/hostnames con el entorno real o replicar en Apache reglas similares a `deploy/nginx/scnexus.conf.example` **antes** del proxy al frontend.
@@ -264,7 +366,11 @@ Los avisos `Packages ... configurado varias veces` no impidieron el despliegue d
 ## 10) Resumen de comandos (copiar despues de install limpio)
 
 ```bash
-cd /storage/scnexus-front && git pull && docker compose up -d --build
+cd /storage/scnexus-front
+git fetch origin
+git checkout frontend-dockerizado
+git pull --ff-only origin frontend-dockerizado
+docker compose up -d --build
 curl -I http://127.0.0.1:8081
 curl -I https://codigoqr.mabelgroup.com.ec
 ```

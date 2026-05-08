@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Subruta bajo mismo dominio (Apache + legacy en codigoqr). Sin esto, el HTML pide /assets/* en la raíz y Apache devuelve 404 (no pasa al contenedor).
+        # Despliegue solo esta SPA en la raíz del host: en `.env` definir `VITE_APP_BASE_PATH=/`.
+        VITE_APP_BASE_PATH: ${VITE_APP_BASE_PATH:-/articulo-scaner/}
     image: scnexus-front:latest
     container_name: scnexus-front
     ports:
