@@ -47,7 +47,7 @@
    SSLCertificateKeyFile /etc/ssl/private/server.key
    SSLCertificateChainFile /etc/ssl/certs/bundle.crt
 
-   # --- SCNexus (nuevo) bajo subruta, sin romper sitios legacy ---
+   # --- SCNexus (nuevo) bajo subruta, sin romper sitios legacy (/sc24, /sc22, /checkin siguen en DocumentRoot) ---
    # Requiere build de SCNexus con:
    # VITE_APP_BASE_PATH=/articulo-scaner/
    ProxyPreserveHost On
@@ -55,6 +55,10 @@
 
    # Redirige /articulo-scaner (sin slash final) a /articulo-scaner/
    RedirectMatch 302 ^/articulo-scaner$ /articulo-scaner/
+
+   # Obligatorio si en el navegador probás /articulo-scaner/scan-api/... (no es la URL del front). Sin esto, Apache manda eso al contenedor y devuelve HTML del SPA.
+   # El front llama /scan-api/ en la raíz del dominio. No afecta /sc24/, /sc22/ ni /checkin/.
+   RedirectMatch permanent ^/articulo-scaner/scan-api/(.*)$ /scan-api/$1
 
    # Frontend SCNexus servido por contenedor Docker (nginx interno en 127.0.0.1:8081).
    # Usar prefijo sin slash final para cubrir también recargas en subrutas internas.
