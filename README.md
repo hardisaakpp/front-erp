@@ -216,6 +216,7 @@ Tambien puedes usar Compose:
 
 ```bash
 # Produccion/local runtime (nginx, imagen final)
+# Opcional: en `.env` junto al compose, `SCAN_API_UPSTREAM=http://HOST:PUERTO` (API .NET de scan; ver docker-compose.yml).
 docker compose up -d --build
 
 # Desarrollo (Vite + proxy, sin nginx)

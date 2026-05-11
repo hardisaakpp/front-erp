@@ -14,7 +14,13 @@ ENV VITE_APP_BASE_PATH=${VITE_APP_BASE_PATH}
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
-COPY deploy/nginx/scnexus-spa.conf /etc/nginx/conf.d/default.conf
+# Upstream del microservicio .NET de scan (GET /api/v1/warehouses, etc.).
+# Default: srv-mabuiosapi (192.168.2.153:8080) → contenedor scnexus-articulo-api.
+# Otro despliegue: docker compose build --build-arg SCAN_API_UPSTREAM=http://HOST:PUERTO
+ARG SCAN_API_UPSTREAM=http://192.168.2.153:8080
+COPY deploy/nginx/scnexus-spa.conf /tmp/scnexus-spa.conf
+RUN sed "s|__SCAN_API_UPSTREAM__|${SCAN_API_UPSTREAM}|g" /tmp/scnexus-spa.conf > /etc/nginx/conf.d/default.conf \
+    && rm /tmp/scnexus-spa.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

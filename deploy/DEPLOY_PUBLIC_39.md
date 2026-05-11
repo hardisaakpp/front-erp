@@ -276,7 +276,13 @@ curl -I https://codigoqr.mabelgroup.com.ec
 ss -ltnp | grep -E ':80 |:443 '
 ```
 
-La segunda línea debe devolver **`application/json`** (p. ej. 401 sin token) o listado en **200**, no **`text/html`** ni **504** hacia un upstream inexistente. Si falla, el microservicio de scan **no** está en `192.168.2.12:8080`: editar en el repo `deploy/nginx/scnexus-spa.conf` el `proxy_pass` de `location /scan-api/` al host:puerto real y volver a construir la imagen.
+La segunda línea debe devolver **`application/json`** (p. ej. 401 sin token) o listado en **200**, no **`text/html`**, **404** vacío ni **504**. El upstream del scan se define al **build** de la imagen con **`SCAN_API_UPSTREAM`** (por defecto `http://192.168.2.153:8080`, contenedor `scnexus-articulo-api` en `srv-mabuiosapi`). Si cambia de host/puerto, en el directorio del compose (p. ej. `/storage/scnexus-front`), crear o editar `.env` junto a `docker-compose.yml`:
+
+```bash
+SCAN_API_UPSTREAM=http://192.168.2.153:8080
+```
+
+Luego `docker compose build --no-cache && docker compose up -d`. Sin `docker compose`, usar `docker build --build-arg SCAN_API_UPSTREAM=http://HOST:PUERTO -t scnexus-front:latest .`
 
 Desde cualquier cliente con acceso DNS:
 
