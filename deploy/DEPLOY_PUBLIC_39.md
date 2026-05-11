@@ -282,6 +282,10 @@ Desde cualquier cliente con acceso DNS:
   - `https://codigoqr.mabelgroup.com.ec/articulo-scaner/`
 - Revisar en DevTools que SCNexus consulte APIs correctamente (`/api/*`, `/scan-api/*`, etc.).
 
+**Rutas que no deben confundirse:** el API de escaneo se expone en la **raíz del dominio**: `https://codigoqr.mabelgroup.com.ec/scan-api/api/v1/warehouses`. La ruta `.../articulo-scaner/scan-api/...` no es la que usa el front; si alguien la abre en el navegador, el Nginx del contenedor redirige a `/scan-api/...`. Las apps legacy (`/sc24/`, `/sc22/`, `/checkin/`) usan otros prefijos y no compiten con `/scan-api/`.
+
+**Si `curl -sI http://127.0.0.1:8081/scan-api/...` devuelve 504:** el upstream configurado en `deploy/nginx/scnexus-spa.conf` (bloque `location /scan-api/`) no alcanza el servicio .NET de scan. Ajustar ahí el `proxy_pass` al host y puerto reales donde corre ese API (puede ser distinto del Core en `192.168.2.12:8080`). Opción alternativa en Apache: `ProxyPass /scan-api/` directo a ese backend sin pasar por el contenedor.
+
 ---
 
 ## 7) Actualizar despliegue
