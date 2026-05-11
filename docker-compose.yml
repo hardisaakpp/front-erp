@@ -11,4 +11,7 @@ services:
     container_name: scnexus-front
     ports:
       - "${SCNEXUS_FRONT_PORT:-8081}:80"
+    # Permite que Nginx (scnexus-spa.conf) alcance el API de scan en el host (p. ej. :8080).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped

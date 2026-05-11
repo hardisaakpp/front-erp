@@ -187,6 +187,13 @@ RedirectMatch 302 ^/articulo-scaner$ /articulo-scaner/
 # Enviar solo la subruta al contenedor (no usar ProxyPass /)
 ProxyPass        /articulo-scaner/ http://127.0.0.1:8081/articulo-scaner/
 ProxyPassReverse /articulo-scaner/ http://127.0.0.1:8081/articulo-scaner/
+
+# Mismas APIs que el front pide en el dominio raíz (obligatorio para Articulo Scaner).
+# El Nginx del contenedor (`deploy/nginx/scnexus-spa.conf`) hace el proxy final a los backends.
+ProxyPass        /api/             http://127.0.0.1:8081/api/
+ProxyPassReverse /api/             http://127.0.0.1:8081/api/
+ProxyPass        /scan-api/        http://127.0.0.1:8081/scan-api/
+ProxyPassReverse /scan-api/        http://127.0.0.1:8081/scan-api/
 ```
 
 Aplicar:
