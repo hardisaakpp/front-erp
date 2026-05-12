@@ -7,8 +7,7 @@ Este documento deja el procedimiento final validado para publicar SCNexus en `19
 - Mantener operativos:
   - `https://codigoqr.mabelgroup.com.ec/sc24/`
   - `https://codigoqr.mabelgroup.com.ec/checkin/mns_check.php`
-- Publicar SCNexus en subruta dedicada:
-  - `https://codigoqr.mabelgroup.com.ec/articulo-scaner/`
+- Publicar SCNexus en subruta dedicada (`/scnexus-front/`). Las URLs antiguas bajo `/articulo-scaner/` redirigen **301** al nuevo prefijo (Nginx en contenedor y/o reglas en Apache; ver `deploy/nginx/scnexus-spa.conf` y `deploy/apache/sitio.conf.reference`).
 - Evitar capturar todo el dominio con `ProxyPass /` desde un vhost nuevo.
 
 ## Arquitectura final recomendada
@@ -19,7 +18,7 @@ Cliente (navegador)
         -> Apache vhost existente (sitio.conf, DocumentRoot /storage)
             -> /sc24/*      (legacy en /storage/sc24)
             -> /checkin/*   (legacy en /storage/checkin)
-            -> /articulo-scaner/*  (proxy al contenedor SCNexus en 127.0.0.1:8081)
+            -> /scnexus-front/*  (proxy al contenedor SCNexus en 127.0.0.1:8081)
 ```
 
 - **Dominio publico:** `codigoqr.mabelgroup.com.ec`.
@@ -87,14 +86,14 @@ Si tu distro no tiene suite en `download.docker.com` para ese `VERSION_CODENAME`
 
 ## 3) Levantar el frontend con Compose
 
-### Base path `/articulo-scaner/` en el mismo dominio (legacy + SPA)
+### Base path `/scnexus-front/` en el mismo dominio (legacy + SPA)
 
 `.env.production` esta **en `.gitignore`**: despues de `git pull` el servidor suele construir sin esas vars. El Dockerfile ahora admite **`VITE_APP_BASE_PATH` como build-arg** desde `docker-compose.yml`.
 
 Creá en **`/storage/scnexus-front/.env`** (junto al `compose`, no commiteado) al menos:
 
 ```env
-VITE_APP_BASE_PATH=/articulo-scaner/
+VITE_APP_BASE_PATH=/scnexus-front/
 ```
 
 Opcional: copiá el resto de variables de `.env.production.example` ahí mismo o mantené un `.env.production` solo en servidor; el build-arg vuelve a exportar **`VITE_APP_BASE_PATH`** dentro de la imagen antes de `npm run build`.
@@ -108,12 +107,12 @@ docker compose up -d
 docker compose ps
 ```
 
-Comprobar dentro del contenedor que el bundle salió bajo subruta (debe existir la carpeta y los `src`/ `href` con `/articulo-scaner/assets/`):
+Comprobar dentro del contenedor que el bundle salió bajo subruta (debe existir la carpeta y los `src`/ `href` con `/scnexus-front/assets/`):
 
 ```bash
 docker exec scnexus-front ls -la /usr/share/nginx/html/
-# Vite deposita index.html y assets/ en la raíz; el prefijo /articulo-scaner/ solo va en URLs del HTML.
-docker exec scnexus-front grep -Eo 'src="/articulo-scaner/[^"]+"' /usr/share/nginx/html/index.html | head
+# Vite deposita index.html y assets/ en la raíz; el prefijo /scnexus-front/ solo va en URLs del HTML.
+docker exec scnexus-front grep -Eo 'src="/scnexus-front/[^"]+"' /usr/share/nginx/html/index.html | head
 ```
 
 ### Despliegue en raíz del contenedor (sin subruta)
@@ -146,7 +145,7 @@ SCNEXUS_FRONT_PORT=8090 docker compose up -d --build
 
 ## 4) Apache: integrar SCNexus sin romper legacy
 
-> Procedimiento final: editar el vhost existente `sitio.conf` para mantener `sc24`/`checkin` y agregar solo `/articulo-scaner/` al contenedor.
+> Procedimiento final: editar el vhost existente `sitio.conf` para mantener `sc24`/`checkin` y agregar solo `/scnexus-front/` al contenedor.
 
 ### 4.1 Habilitar modulos
 
@@ -181,15 +180,20 @@ En el bloque `<VirtualHost *:443>`, mantener `DocumentRoot /storage` (legacy) y 
 ProxyPreserveHost On
 ProxyRequests Off
 
-# Normalizar sin slash final
-RedirectMatch 302 ^/articulo-scaner$ /articulo-scaner/
-
-# APIs del escáner van en la raíz (/scan-api/), no bajo /articulo-scaner/. No interfiere con /sc24/, /sc22/, /checkin/.
+# Legacy /articulo-scaner/ → /scnexus-front/ (301). scan-api bajo la ruta antigua va a /scan-api/.
 RedirectMatch permanent ^/articulo-scaner/scan-api/(.*)$ /scan-api/$1
+RedirectMatch permanent ^/articulo-scaner/(.*)$ /scnexus-front/$1
+RedirectMatch 302 ^/articulo-scaner$ /scnexus-front/
+
+# Normalizar sin slash final en la nueva subruta
+RedirectMatch 302 ^/scnexus-front$ /scnexus-front/
+
+# Si en el navegador se usa /scnexus-front/scan-api/... (URL incorrecta del front).
+RedirectMatch permanent ^/scnexus-front/scan-api/(.*)$ /scan-api/$1
 
 # Enviar solo la subruta al contenedor (no usar ProxyPass /)
-ProxyPass        /articulo-scaner/ http://127.0.0.1:8081/articulo-scaner/
-ProxyPassReverse /articulo-scaner/ http://127.0.0.1:8081/articulo-scaner/
+ProxyPass        /scnexus-front/ http://127.0.0.1:8081/scnexus-front/
+ProxyPassReverse /scnexus-front/ http://127.0.0.1:8081/scnexus-front/
 
 # Mismas APIs que el front pide en el dominio raíz (obligatorio para Articulo Scaner).
 # El Nginx del contenedor (`deploy/nginx/scnexus-spa.conf`) hace el proxy final a los backends.
@@ -291,7 +295,7 @@ Desde cualquier cliente con acceso DNS:
   - `https://codigoqr.mabelgroup.com.ec/sc24/`
   - `https://codigoqr.mabelgroup.com.ec/checkin/mns_check.php`
 - Probar SCNexus:
-  - `https://codigoqr.mabelgroup.com.ec/articulo-scaner/`
+  - `https://codigoqr.mabelgroup.com.ec/scnexus-front/`
 - Revisar en DevTools que SCNexus consulte APIs correctamente (`/api/*`, `/scan-api/*`, etc.).
 
 ---
@@ -333,7 +337,7 @@ docker compose up -d --build
 SCNexus debe construirse con base path de subruta para convivir en el mismo dominio legacy:
 
 ```env
-VITE_APP_BASE_PATH=/articulo-scaner/
+VITE_APP_BASE_PATH=/scnexus-front/
 ```
 
 Esta variable ya está soportada en:
@@ -345,7 +349,7 @@ Sin ese ajuste, la SPA intentará cargar assets desde `/assets/*` (raíz) y pued
 
 ### Lección aprendida sobre rutas legacy
 
-- Alias de Vue Router como `/checkin` o `/checkin/index.php` para apuntar a `articulo-scaner` reemplazan el flujo PHP legacy.
+- Alias de Vue Router como `/checkin` o `/checkin/index.php` para apuntar al módulo escáner (`src/modules/articulo-scaner`) reemplazan el flujo PHP legacy.
 - Para conservar `checkin` histórico, no usar esos alias ni `ProxyPass /` global que capture todo el dominio.
 
 ### Lección aprendida sobre remotos Git

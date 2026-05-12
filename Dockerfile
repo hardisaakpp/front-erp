@@ -8,7 +8,7 @@ COPY . .
 
 # `VITE_APP_BASE_PATH`, `VITE_*` en produccion: proceso en build y tiene prioridad sobre archivos ignorados por git que no llegan en el contexto Docker.
 # Por defecto subruta compartida con legacy (codigoqr); raíz del host: --build-arg VITE_APP_BASE_PATH=/
-ARG VITE_APP_BASE_PATH=/articulo-scaner/
+ARG VITE_APP_BASE_PATH=/scnexus-front/
 ENV VITE_APP_BASE_PATH=${VITE_APP_BASE_PATH}
 
 RUN npm run build

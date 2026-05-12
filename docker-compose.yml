@@ -6,7 +6,7 @@ services:
       args:
         # Subruta bajo mismo dominio (Apache + legacy en codigoqr). Sin esto, el HTML pide /assets/* en la raíz y Apache devuelve 404 (no pasa al contenedor).
         # Despliegue solo esta SPA en la raíz del host: en `.env` definir `VITE_APP_BASE_PATH=/`.
-        VITE_APP_BASE_PATH: ${VITE_APP_BASE_PATH:-/articulo-scaner/}
+        VITE_APP_BASE_PATH: ${VITE_APP_BASE_PATH:-/scnexus-front/}
         # Nginx: proxy de /scan-api/* hacia el .NET de escaneo (sin slash final en la URL).
         # 192.168.2.153 = srv-mabuiosapi (contenedor scnexus-articulo-api en :8080).
         SCAN_API_UPSTREAM: ${SCAN_API_UPSTREAM:-http://192.168.2.153:8080}

@@ -47,23 +47,26 @@
    SSLCertificateKeyFile /etc/ssl/private/server.key
    SSLCertificateChainFile /etc/ssl/certs/bundle.crt
 
-   # --- SCNexus (nuevo) bajo subruta, sin romper sitios legacy (/sc24, /sc22, /checkin siguen en DocumentRoot) ---
+   # --- SCNexus bajo subruta /scnexus-front/, sin romper sitios legacy (/sc24, /sc22, /checkin siguen en DocumentRoot) ---
    # Requiere build de SCNexus con:
-   # VITE_APP_BASE_PATH=/articulo-scaner/
+   # VITE_APP_BASE_PATH=/scnexus-front/
    ProxyPreserveHost On
    ProxyRequests Off
 
-   # Redirige /articulo-scaner (sin slash final) a /articulo-scaner/
-   RedirectMatch 302 ^/articulo-scaner$ /articulo-scaner/
-
-   # Obligatorio si en el navegador probás /articulo-scaner/scan-api/... (no es la URL del front). Sin esto, Apache manda eso al contenedor y devuelve HTML del SPA.
-   # El front llama /scan-api/ en la raíz del dominio. No afecta /sc24/, /sc22/ ni /checkin/.
+   # Legacy /articulo-scaner/ → /scnexus-front/ (301). scan-api bajo la ruta antigua va a /scan-api/.
    RedirectMatch permanent ^/articulo-scaner/scan-api/(.*)$ /scan-api/$1
+   RedirectMatch permanent ^/articulo-scaner/(.*)$ /scnexus-front/$1
+   RedirectMatch 302 ^/articulo-scaner$ /scnexus-front/
+
+   # Redirige /scnexus-front (sin slash final) a /scnexus-front/
+   RedirectMatch 302 ^/scnexus-front$ /scnexus-front/
+
+   # Si en el navegador probás /scnexus-front/scan-api/... (URL incorrecta del front).
+   RedirectMatch permanent ^/scnexus-front/scan-api/(.*)$ /scan-api/$1
 
    # Frontend SCNexus servido por contenedor Docker (nginx interno en 127.0.0.1:8081).
-   # Usar prefijo sin slash final para cubrir también recargas en subrutas internas.
-   ProxyPass        /articulo-scaner http://127.0.0.1:8081/articulo-scaner retry=0
-   ProxyPassReverse /articulo-scaner http://127.0.0.1:8081/articulo-scaner
+   ProxyPass        /scnexus-front http://127.0.0.1:8081/scnexus-front retry=0
+   ProxyPassReverse /scnexus-front http://127.0.0.1:8081/scnexus-front
 
    # APIs mínimas necesarias para Articulo Scaner (incluye login del front).
    # Nota: se enruta al contenedor; el Nginx interno aplica el proxy final al backend.

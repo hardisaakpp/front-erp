@@ -75,7 +75,7 @@ Si generas el build en tu máquina y solo subes `dist/` a algo como `/storage/sc
 - `VITE_CORE_API_URL=/api`
 - `VITE_MBA3_API_URL=/api`
 - `VITE_MBA3_API_BASE_URL=/api/mba3`
-- `VITE_APP_BASE_PATH=/` (o subruta, p. ej. `/articulo-scaner/`, si compartes dominio con apps legacy)
+- `VITE_APP_BASE_PATH=/` (o subruta, p. ej. `/scnexus-front/`, si compartes dominio con apps legacy)
 
 Así el login va a `https://tu-dominio/api/Auth/login` y el proxy del servidor habla con los backends internos.
 

@@ -105,7 +105,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-const RECENT_CODES_KEY = 'articulo-scaner:recent-codes'
+const RECENT_CODES_KEY = 'scnexus-front:recent-codes'
 const RECENT_CODES_LIMIT = 10
 
 const props = defineProps<{
