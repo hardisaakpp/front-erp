@@ -65,8 +65,9 @@
    RedirectMatch permanent ^/scnexus-front/scan-api/(.*)$ /scan-api/$1
 
    # Frontend SCNexus servido por contenedor Docker (nginx interno en 127.0.0.1:8081).
-   ProxyPass        /scnexus-front http://127.0.0.1:8081/scnexus-front retry=0
-   ProxyPassReverse /scnexus-front http://127.0.0.1:8081/scnexus-front
+   # Barras finales: enrutan correctamente /scnexus-front/assets/* hacia el mismo path en el contenedor.
+   ProxyPass        /scnexus-front/ http://127.0.0.1:8081/scnexus-front/ retry=0
+   ProxyPassReverse /scnexus-front/ http://127.0.0.1:8081/scnexus-front/
 
    # APIs mínimas necesarias para Articulo Scaner (incluye login del front).
    # Nota: se enruta al contenedor; el Nginx interno aplica el proxy final al backend.

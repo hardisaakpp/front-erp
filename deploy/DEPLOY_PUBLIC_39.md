@@ -115,6 +115,8 @@ docker exec scnexus-front ls -la /usr/share/nginx/html/
 docker exec scnexus-front grep -Eo 'src="/scnexus-front/[^"]+"' /usr/share/nginx/html/index.html | head
 ```
 
+Si el HTML carga pero **`/scnexus-front/assets/*.js` devuelve 404**: (1) forzá `docker compose build --no-cache` (evita capas cacheadas de `npm run build` desalineadas con el `index.html`); (2) comprobá que un `src` del `grep` anterior exista en disco: `docker exec scnexus-front ls /usr/share/nginx/html/assets/ | head`; (3) en Apache usá `ProxyPass /scnexus-front/ http://127.0.0.1:8081/scnexus-front/` **con barras finales** (ver `deploy/apache/sitio.conf.reference`).
+
 ### Despliegue en raíz del contenedor (sin subruta)
 
 Si no necesitás subruta, omití `VITE_APP_BASE_PATH` en `.env` o usá `/` explicito (`VITE_APP_BASE_PATH=/`).
