@@ -14,4 +14,12 @@ services:
     container_name: scnexus-front
     ports:
       - "${SCNEXUS_FRONT_PORT:-8081}:80"
+    networks:
+      - default
+      - mba3-nexus_edge
     restart: unless-stopped
+
+networks:
+  mba3-nexus_edge:
+    name: mba3-nexus_edge
+    external: true

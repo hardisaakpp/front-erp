@@ -6,22 +6,24 @@
  * Extrae mensaje de error del backend de forma consistente
  */
 export function extractErrorMessage(error: any): string {
-  let message = error.message || 'Error desconocido'
-  
-  if (error.response?.data) {
+  const fallbackMessage = error.message || 'Error desconocido'
+
+  if (error.response?.data && typeof error.response.data === 'object') {
+    const data = error.response.data
+
     // Prioridad 1: Business exception
-    if (error.response.data.type === 'business_exception') {
-      return error.response.data.error || error.response.data.message || message
+    if (data.type === 'business_exception') {
+      return data.error || data.message || fallbackMessage
     }
-    
+
     // Prioridad 2: Campo 'error'
-    if (error.response.data.error) {
-      return error.response.data.error
+    if (data.error) {
+      return data.error
     }
-    
+
     // Prioridad 3: Campo 'detail' (FastAPI)
-    if (error.response.data.detail) {
-      const detail = error.response.data.detail
+    if (data.detail) {
+      const detail = data.detail
       if (Array.isArray(detail)) {
         return detail.map((item: any) => {
           if (typeof item === 'string') return item
@@ -39,21 +41,45 @@ export function extractErrorMessage(error: any): string {
       }
       return String(detail)
     }
-    
+
     // Prioridad 4: Campo 'message'
-    if (error.response.data.message) {
-      return error.response.data.message
+    if (data.message) {
+      return data.message
     }
   }
-  
+
+  // Cuerpo string (p. ej. HTML de error) — intentar mensaje breve
+  if (error.response?.data && typeof error.response.data === 'string') {
+    const trimmed = error.response.data.trim()
+    if (trimmed.length > 0 && trimmed.length < 500) {
+      return trimmed
+    }
+  }
+
+  // Hubo respuesta HTTP pero sin cuerpo útil (500 vacío, etc.).
+  // Axios define `error.request` también cuando hubo respuesta; no confundir con fallo de red.
+  if (error.response) {
+    const status = error.response.status
+    if (status >= 500) {
+      return `Error del servidor MBA3 (${status}). Revisa los logs del API (p. ej. contenedor mba3-api / uvicorn) y la conexión a la base de datos.`
+    }
+    if (status === 401) {
+      return 'No autorizado. Vuelve a iniciar sesión.'
+    }
+    if (status === 403) {
+      return 'Acceso denegado para esta operación.'
+    }
+    return fallbackMessage
+  }
+
   if (error.request) {
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
       return 'El servidor tardó demasiado en responder. El proceso de validación puede estar ejecutándose. Intenta nuevamente en unos minutos.'
     }
     return 'No se pudo conectar con el servidor. Verifica tu conexión a internet.'
   }
-  
-  return message
+
+  return fallbackMessage
 }
 
 /**
