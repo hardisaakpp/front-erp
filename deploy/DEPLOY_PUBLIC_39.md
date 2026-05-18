@@ -341,12 +341,25 @@ Desde cualquier cliente con acceso DNS:
 
 ## 7) Actualizar despliegue
 
+**Commit mínimo:** `04edbce` o posterior en `frontend-dockerizado` (quita `mba3-nexus_edge` del `docker-compose.yml` base). Si `docker compose up` falla con `network mba3-nexus_edge ... could not be found`, el contenedor **no** arranca aunque el build haya terminado.
+
 ```bash
 cd /storage/scnexus-front
 git fetch origin
 git checkout frontend-dockerizado
 git pull --ff-only origin frontend-dockerizado
-docker compose up -d --build
+git rev-parse --short HEAD   # debe ser >= 04edbce
+
+bash deploy/server-39-redeploy.sh
+```
+
+O manualmente:
+
+```bash
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+docker ps --filter name=scnexus-front
 ```
 
 Logs:
