@@ -12,7 +12,9 @@ export const promocionSobresApi = axios.create({
   timeout: 30000,
   headers: {
     Accept: 'application/json',
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache'
   }
 })
 

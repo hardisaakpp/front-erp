@@ -70,7 +70,15 @@ export function extractEntregaEstadoPatchFromAxiosError(
   return parseEntregaEstadoDetails(err.response?.data?.details)
 }
 
-function unwrapSuccess<T>(body: ApiResponse<T>): { data: T; message: string | null } {
+function unwrapSuccess<T>(body: ApiResponse<T> | undefined): { data: T; message: string | null } {
+  if (!body || typeof body !== 'object') {
+    const error: UiError = {
+      code: 'UNKNOWN',
+      message:
+        'Respuesta vacía del servidor (posible caché 304). Recarga la página o reconstruye el contenedor scnexus-front con el proxy de promoción-sobres-api.',
+    }
+    throw Object.assign(new Error(error.message), { uiError: error })
+  }
   if (!body.success) {
     const error: UiError = {
       code: (body.error_code?.toUpperCase() as UiError['code']) || 'UNKNOWN',

@@ -10,10 +10,14 @@ services:
         # Nginx: proxy de /scan-api/* hacia el .NET de escaneo (sin slash final en la URL).
         # 192.168.2.153 = srv-mabuiosapi (contenedor scnexus-articulo-api en :8080).
         SCAN_API_UPSTREAM: ${SCAN_API_UPSTREAM:-http://192.168.2.153:8080}
+        # scnexus-validacionCI (docker compose / dotnet run en el host, puerto 8083).
+        PROMOCION_SOBRES_API_UPSTREAM: ${PROMOCION_SOBRES_API_UPSTREAM:-http://host.docker.internal:8083}
     image: scnexus-front:latest
     container_name: scnexus-front
     ports:
       - "${SCNEXUS_FRONT_PORT:-8081}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - default
       - mba3-nexus_edge
