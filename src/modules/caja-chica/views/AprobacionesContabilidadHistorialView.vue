@@ -102,6 +102,8 @@
                 <div v-if="getIntegracionReferencia(group.idLiquidacion)" class="text-xs text-gray-500 dark:text-gray-400">
                   Ref: {{ getIntegracionReferencia(group.idLiquidacion) }}
                 </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Subtotal: {{ formatAmount(group.subtotalMonto) }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">IVA: {{ formatAmount(group.ivaMonto) }}</div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">Total: {{ formatAmount(group.totalMonto) }}</div>
                 <button
                   type="button"
@@ -645,7 +647,100 @@ const resetFiltros = () => {
   filtroIntegracion.value = 'PENDIENTES'
 }
 
+type AprobacionMontosByBase = {
+  base15: number
+  base0: number
+}
+
+const resolveTipoBase = (rawTipoBase: unknown, detalle?: LiquidacionDetalleItem): 'BASE_15' | 'BASE_0' | '' => {
+  const raw = normalizeString(rawTipoBase).toUpperCase().replace(/\s+/g, '').replace(/-/g, '_')
+
+  if (raw === 'BASE_15' || raw === 'BASE15' || raw === '15' || raw === 'IVA_15' || raw === 'IVA15') {
+    return 'BASE_15'
+  }
+  if (raw === 'BASE_0' || raw === 'BASE0' || raw === '0' || raw === 'IVA_0' || raw === 'IVA0') {
+    return 'BASE_0'
+  }
+
+  const hasBase15 = Number(detalle?.subtotalConIva ?? 0) > 0
+  const hasBase0 = Number(detalle?.subtotalSinIva ?? 0) > 0
+  if (hasBase15 && !hasBase0) return 'BASE_15'
+  if (hasBase0 && !hasBase15) return 'BASE_0'
+
+  return ''
+}
+
+const calculateTotalsFromBases = (montosByDetalle: Record<number, AprobacionMontosByBase>) => {
+  const roundAmount = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+  const base15 = roundAmount(Object.values(montosByDetalle).reduce((acc, montos) => acc + Number(montos.base15 ?? 0), 0))
+  const base0 = roundAmount(Object.values(montosByDetalle).reduce((acc, montos) => acc + Number(montos.base0 ?? 0), 0))
+  const subtotal = roundAmount(base15 + base0)
+  const iva = roundAmount(base15 * 0.15)
+  const total = roundAmount(subtotal + iva)
+  return { base15, base0, subtotal, iva, total }
+}
+
+const buildAprobacionMontosByDetalle = (
+  items: HistorialItem[],
+  detalleById: Record<number, LiquidacionDetalleItem> = {}
+) => {
+  const roundAmount = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+  const byDetalle: Record<number, AprobacionMontosByBase> = {}
+  const approvedDetalleIds = new Set<number>()
+
+  items.forEach(item => {
+    const idDetalle = Number(item.idDetalle ?? 0)
+    if (!idDetalle) return
+    const estado = normalizeString(item.estado).toUpperCase()
+    if (estado.includes('APROBAD')) {
+      approvedDetalleIds.add(idDetalle)
+    }
+  })
+
+  approvedDetalleIds.forEach(idDetalle => {
+    const detalle = detalleById[idDetalle]
+    if (!detalle) return
+
+    const base15 = roundAmount(Math.max(0, Number(detalle.subtotalConIva ?? 0)))
+    const base0 = roundAmount(Math.max(0, Number(detalle.subtotalSinIva ?? 0)))
+    if (base15 > 0 || base0 > 0) {
+      byDetalle[idDetalle] = { base15, base0 }
+    }
+  })
+
+  // Fallback: si no vinieron subtotales en detalle, usar monto aprobado por tipo base.
+  items.forEach(item => {
+    const idDetalle = Number(item.idDetalle ?? 0)
+    if (!idDetalle) return
+
+    const estado = normalizeString(item.estado).toUpperCase()
+    if (!estado.includes('APROBAD')) return
+
+    if (byDetalle[idDetalle]) return
+
+    const monto = roundAmount(Number(item.montoAprobado ?? 0))
+    if (monto <= 0) return
+
+    const detalle = detalleById[idDetalle]
+    const tipoBase = resolveTipoBase(item.tipoBase, detalle)
+    if (!tipoBase) return
+
+    if (!byDetalle[idDetalle]) {
+      byDetalle[idDetalle] = { base15: 0, base0: 0 }
+    }
+
+    if (tipoBase === 'BASE_15') {
+      byDetalle[idDetalle].base15 = Math.max(byDetalle[idDetalle].base15, monto)
+    } else if (tipoBase === 'BASE_0') {
+      byDetalle[idDetalle].base0 = Math.max(byDetalle[idDetalle].base0, monto)
+    }
+  })
+
+  return byDetalle
+}
+
 const groupedHistorial = computed(() => {
+  const roundAmount = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
   const groups = new Map<number, HistorialItem[]>()
   historial.value.forEach(item => {
     if (!groups.has(item.idLiquidacion)) {
@@ -655,12 +750,37 @@ const groupedHistorial = computed(() => {
   })
 
   const allGroups = Array.from(groups.entries()).map(([idLiquidacion, items]) => {
-    const totalMonto = items.reduce((acc, item) => acc + item.montoAprobado, 0)
+    const detallesLiquidacion = detallesByLiquidacion.value[idLiquidacion] || []
+    const detalleById = detallesLiquidacion.reduce<Record<number, LiquidacionDetalleItem>>((acc, detalle) => {
+      acc[detalle.idDetalle] = detalle
+      return acc
+    }, {})
+    const aprobacionesByDetalle = buildAprobacionMontosByDetalle(items, detalleById)
+
+    let subtotalMonto = 0
+    let ivaMonto = 0
+    Object.values(aprobacionesByDetalle).forEach(montos => {
+      const base15 = Number(montos.base15 ?? 0)
+      const base0 = Number(montos.base0 ?? 0)
+
+      if (base15 > 0) {
+        subtotalMonto += base15
+        ivaMonto += roundAmount(base15 * 0.15)
+      }
+      if (base0 > 0) subtotalMonto += base0
+    })
+
+    subtotalMonto = roundAmount(subtotalMonto)
+    ivaMonto = roundAmount(ivaMonto)
+    const totalMonto = roundAmount(subtotalMonto + ivaMonto)
+
     const base = items[0]
     return {
       idLiquidacion,
       items,
       totalMonto,
+      subtotalMonto,
+      ivaMonto,
       totalItems: items.length,
       codAlmacen: base?.codAlmacen || '-',
       nombreCustodio: base?.nombreCustodio || '-',
@@ -682,7 +802,7 @@ const groupedHistorial = computed(() => {
   })
 })
 
-const isGroupOpen = (idLiquidacion: number) => openGroups.value[idLiquidacion] !== false
+const isGroupOpen = (idLiquidacion: number) => openGroups.value[idLiquidacion] === true
 
 const toggleGroup = (idLiquidacion: number) => {
   openGroups.value[idLiquidacion] = !isGroupOpen(idLiquidacion)
@@ -802,51 +922,71 @@ const fetchMarcaContab = async (codAlmacen: string): Promise<string> => {
   }
 }
 
-const getTaxCode = (detalle: LiquidacionDetalleItem, tipoBase?: string) => {
-  if (tipoBase === 'BASE_15') return 'IVA_15'
-  if (tipoBase === 'BASE_0') return 'IVA_0'
-  return detalle.subtotalConIva > 0 ? 'IVA_15' : 'IVA_0'
-}
-
-const getUCodSt = (detalles: LiquidacionDetalleItem[], tipoBaseByDetalle: Record<number, string> = {}) => {
-  return detalles.some(d => getTaxCode(d, tipoBaseByDetalle[d.idDetalle]) === 'IVA_15') ? '01' : '02'
+const getUCodSt = (
+  detalles: LiquidacionDetalleItem[],
+  montosByDetalle: Record<number, AprobacionMontosByBase>
+) => {
+  return detalles.some(detalle => {
+    const montos = montosByDetalle[detalle.idDetalle]
+    return Number(montos?.base15 ?? 0) > 0
+  }) ? '01' : '02'
 }
 
 const buildDocumentLines = (
   detalles: LiquidacionDetalleItem[],
   codAlmacen: string,
   marcaContab: string,
-  montoAprobadoByDetalle: Record<number, number>,
-  tipoBaseByDetalle: Record<number, string> = {}
+  montosByDetalle: Record<number, AprobacionMontosByBase>
 ) => {
+  const roundAmount = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+
   const grouped = new Map<string, {
     accountCode: string
     itemDescription: string
     quantity: number
     unitPrice: number
-    hasIva: boolean
+    taxCode: 'IVA_15' | 'IVA_0'
   }>()
 
   for (const detalle of detalles) {
-    const montoAprobado = Number(montoAprobadoByDetalle[detalle.idDetalle] ?? 0)
-    if (montoAprobado <= 0) continue
+    const montos = montosByDetalle[detalle.idDetalle]
+    if (!montos) continue
 
     const accountCode = normalizeString(detalle.idGasto)
     if (!accountCode) continue
 
-    const current = grouped.get(accountCode)
-    if (current) {
-      current.quantity += 1
-      current.unitPrice += montoAprobado
-      current.hasIva = current.hasIva || getTaxCode(detalle, tipoBaseByDetalle[detalle.idDetalle]) === 'IVA_15'
-    } else {
-      grouped.set(accountCode, {
-        accountCode,
-        itemDescription: detalle.nombreGasto || detalle.concepto || '',
-        quantity: 1,
-        unitPrice: montoAprobado,
-        hasIva: getTaxCode(detalle, tipoBaseByDetalle[detalle.idDetalle]) === 'IVA_15'
+    const breakdown = [] as Array<{ taxCode: 'IVA_15' | 'IVA_0'; netAmount: number }>
+    if (Number(montos.base15 ?? 0) > 0) {
+      breakdown.push({
+        taxCode: 'IVA_15',
+        netAmount: roundAmount(Number(montos.base15))
       })
+    }
+    if (Number(montos.base0 ?? 0) > 0) {
+      breakdown.push({
+        taxCode: 'IVA_0',
+        netAmount: roundAmount(Number(montos.base0))
+      })
+    }
+
+    for (const part of breakdown) {
+      if (part.netAmount <= 0) continue
+      const groupKey = `${accountCode}::${part.taxCode}`
+
+      const current = grouped.get(groupKey)
+      if (current) {
+        // Para evitar multiplicaciones no deseadas en SAP, agrupamos en una sola línea por cuenta/impuesto.
+        current.quantity = 1
+        current.unitPrice = current.unitPrice + part.netAmount
+      } else {
+        grouped.set(groupKey, {
+          accountCode,
+          itemDescription: detalle.nombreGasto || detalle.concepto || '',
+          quantity: 1,
+          unitPrice: part.netAmount,
+          taxCode: part.taxCode
+        })
+      }
     }
   }
 
@@ -855,8 +995,8 @@ const buildDocumentLines = (
       AccountCode: item.accountCode,
       ItemDescription: item.itemDescription,
       Quantity: item.quantity,
-      UnitPrice: item.unitPrice,
-      TaxCode: item.hasIva ? 'IVA_15' : 'IVA_0',
+      UnitPrice: roundAmount(item.unitPrice),
+      TaxCode: item.taxCode,
       CostingCode: codAlmacen,
       CostingCode2: marcaContab,
       CostingCode3: 'COME'
@@ -864,12 +1004,60 @@ const buildDocumentLines = (
   })
 }
 
+const calculatePayloadTotals = (documentLines: Array<{ UnitPrice?: number; Quantity?: number; TaxCode?: string }>) => {
+  const roundAmount = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+
+  const subtotal = roundAmount(documentLines.reduce((acc, line) => {
+    const quantity = Number(line.Quantity ?? 1)
+    const unitPrice = Number(line.UnitPrice ?? 0)
+    return acc + (quantity * unitPrice)
+  }, 0))
+
+  const iva = roundAmount(documentLines.reduce((acc, line) => {
+    if (line.TaxCode !== 'IVA_15') return acc
+    const quantity = Number(line.Quantity ?? 1)
+    const unitPrice = Number(line.UnitPrice ?? 0)
+    return acc + (quantity * unitPrice * 0.15)
+  }, 0))
+
+  const total = roundAmount(subtotal + iva)
+
+  return { subtotal, iva, total }
+}
+
+const calculateAprobacionTotal = (montoAprobadoByDetalle: Record<number, number>) => {
+  const roundAmount = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+  const total = Object.values(montoAprobadoByDetalle).reduce((acc, value) => acc + Number(value ?? 0), 0)
+  return roundAmount(total)
+}
+
+const downloadJsonPayload = (idLiquidacion: number, payload: unknown) => {
+  try {
+    const jsonText = JSON.stringify(payload, null, 2)
+    const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+    const fileName = `liquidacion-${idLiquidacion}-payload-${stamp}.json`
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch {
+    // No bloquear la integración si falla la descarga del respaldo.
+  }
+}
+
 const integrarLiquidacion = async (idLiquidacion: number) => {
   if (integrationLoading.value[idLiquidacion]) return
 
-  const detalles = detallesByLiquidacion.value[idLiquidacion] || []
-  if (!detalles.length) {
-    error.value = 'No se encontraron detalles para integrar.'
+  const selectedGroup = groupedHistorial.value.find(group => group.idLiquidacion === idLiquidacion)
+  if (!selectedGroup) {
+    error.value = 'No se encontro la liquidacion seleccionada en la vista actual.'
     return
   }
 
@@ -882,20 +1070,16 @@ const integrarLiquidacion = async (idLiquidacion: number) => {
   integrationLoading.value[idLiquidacion] = true
   error.value = ''
   try {
-    const aprobacionesByDetalle = historial.value
-      .filter(item => item.idLiquidacion === idLiquidacion)
-      .reduce<Record<number, number>>((acc, item) => {
-        const estado = normalizeString(item.estado).toUpperCase()
-        acc[item.idDetalle] = estado === 'APROBADO' ? Number(item.montoAprobado || 0) : 0
-        return acc
-      }, {})
+    const aprobacionesLiquidacion = selectedGroup.items
 
-    const tipoBaseByDetalle = historial.value
-      .filter(item => item.idLiquidacion === idLiquidacion)
-      .reduce<Record<number, string>>((acc, item) => {
-        acc[item.idDetalle] = item.tipoBase || ''
-        return acc
-      }, {})
+    const detalleIdsAprobacion = new Set(aprobacionesLiquidacion.map(item => item.idDetalle))
+    const detalles = (detallesByLiquidacion.value[idLiquidacion] || [])
+      .filter(detalle => detalle.idLiquidacion === idLiquidacion && detalleIdsAprobacion.has(detalle.idDetalle))
+
+    if (!detalles.length) {
+      error.value = 'No se encontraron detalles para integrar.'
+      return
+    }
 
     const docDate = buildDocDate()
     const codAlmacen = normalizeString(liquidacion.codAlmacen)
@@ -903,27 +1087,70 @@ const integrarLiquidacion = async (idLiquidacion: number) => {
       resolveCardCodeByCedula(liquidacion.cedulaCustodio),
       fetchMarcaContab(codAlmacen)
     ])
-    const documentLines = buildDocumentLines(detalles, codAlmacen, marcaContab, aprobacionesByDetalle, tipoBaseByDetalle)
+    const detalleById = detalles.reduce<Record<number, LiquidacionDetalleItem>>((acc, detalle) => {
+      acc[detalle.idDetalle] = detalle
+      return acc
+    }, {})
+    const montosByDetalle = buildAprobacionMontosByDetalle(aprobacionesLiquidacion, detalleById)
+    const documentLines = buildDocumentLines(detalles, codAlmacen, marcaContab, montosByDetalle)
     if (!documentLines.length) {
       error.value = 'No hay valores aprobados por contabilidad para integrar.'
       return
     }
+
+    const baseTotals = calculateTotalsFromBases(montosByDetalle)
+    const totalAprobadoPantalla = baseTotals.total
+
     const payload = {
       CardCode: cardCodeCustodio,
       Series: 217,
       DocDate: docDate,
-      DocDueDate: docDate,
-      TaxDate: docDate,
       Comments: 'LIQUIDACION DE COMPRA',
       DocType: 'dDocument_Service',
       DocCurrency: 'USD',
-      JournalMemo: `REPOSICION CAJA CHICA LLP PORTAL ${codAlmacen}`.trim(),
-      U_COD_ST: getUCodSt(detalles, tipoBaseByDetalle),
+      JournalMemo: `REPOSICION CAJA CHICA ${codAlmacen}`.trim(),
+      U_COD_ST: getUCodSt(detalles, montosByDetalle),
       U_tipo_comprob: '03',
       U_ORIGEN: 'C',
       U_SER_EST: '001',
       U_SER_PE: '100',
       DocumentLines: documentLines
+    }
+
+    // Respaldo del JSON exacto antes de enviar a SAP.
+    downloadJsonPayload(idLiquidacion, payload)
+
+    const totals = calculatePayloadTotals(payload.DocumentLines)
+    const diferenciaTotal = Number((totals.total - totalAprobadoPantalla).toFixed(2))
+    const hayDiferencia = Math.abs(diferenciaTotal) >= 0.01
+    const payloadJson = JSON.stringify(payload, null, 2)
+
+    const warningLines = hayDiferencia
+      ? [
+          '',
+          `ADVERTENCIA: Total SAP difiere del total aprobado en ${formatAmount(diferenciaTotal)}.`
+        ]
+      : []
+
+    const confirmationMessage = [
+      'Resumen de montos:',
+      `Total aprobado (pantalla): ${formatAmount(totalAprobadoPantalla)}`,
+      `Base 15%: ${formatAmount(baseTotals.base15)}`,
+      `Base 0%: ${formatAmount(baseTotals.base0)}`,
+      `Subtotal base SAP (sin IVA): ${formatAmount(totals.subtotal)}`,
+      `IVA SAP: ${formatAmount(totals.iva)}`,
+      `Total SAP (subtotal + IVA): ${formatAmount(totals.total)}`,
+      `Lineas (JSON): ${payload.DocumentLines.length}`,
+      ...warningLines,
+      '',
+      'JSON a enviar a SAP:',
+      payloadJson,
+      '',
+      'Esta seguro de integrar y enviar?'
+    ].join('\n')
+
+    if (!window.confirm(confirmationMessage)) {
+      return
     }
 
     console.log('[Integracion][Payload Liquidaciones]', JSON.stringify(payload, null, 2))
@@ -1149,7 +1376,7 @@ const loadHistorial = async () => {
 
     openGroups.value = historial.value.reduce<Record<number, boolean>>((acc, item) => {
       if (item.idLiquidacion && acc[item.idLiquidacion] === undefined) {
-        acc[item.idLiquidacion] = true
+        acc[item.idLiquidacion] = false
       }
       return acc
     }, {})
