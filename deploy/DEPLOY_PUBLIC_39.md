@@ -275,11 +275,46 @@ ufw status
 
 ## 6) Validaciones finales
 
+### 6.1 Contenedor realmente actualizado
+
+Si `docker compose up` falló con `network mba3-nexus_edge ... could not be found`, la imagen nueva **no** reemplazó el contenedor (0.0.0.1:8081 seguirá sirviendo HTML viejo en `/promocion-sobres-api/`).
+
+```bash
+cd /storage/scnexus-front
+docker compose up -d --build    # sin red MBA3 en docker-compose.yml base
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.CreatedAt}}"
+docker exec scnexus-front grep -c "promocion-sobres-api" /etc/nginx/conf.d/default.conf
+# Debe ser >= 1. Si es 0, el contenedor sigue siendo una imagen anterior.
+curl -sI "http://127.0.0.1:8081/promocion-sobres-api/api/promocion-sobres/v1/diagnostics/database"
+# Content-Type debe ser application/json (o 401), NO text/html.
+```
+
+En `.env` junto al compose (servidor):
+
+```env
+VITE_APP_BASE_PATH=/scnexus-front/
+PROMOCION_SOBRES_API_UPSTREAM=http://host.docker.internal:8083
+```
+
+El API `scnexus-validacionCI` debe estar escuchando en el host en el puerto configurado (`8083` por defecto).
+
+### 6.2 Permiso en Core (botón sidebar)
+
+El menú **Promoción Sobres** requiere en el usuario (JWT / GET `/Auth/me`):
+
+- `promocion.sobres.view` — ver menú y pantallas del módulo, **o**
+- `promocion.sobres.operate` — menú + llamadas al API de entregas
+
+Registrar el permiso `promocion.sobres.view` en SCNexus.Core y asignarlo al rol de caja. Tras asignar, cerrar sesión y volver a entrar.
+
+### 6.3 Curl habituales
+
 En el servidor:
 
 ```bash
 curl -I http://127.0.0.1:8081
 curl -sI "http://127.0.0.1:8081/scan-api/api/v1/warehouses"
+curl -sI "http://127.0.0.1:8081/promocion-sobres-api/api/promocion-sobres/v1/diagnostics/database"
 curl -I https://codigoqr.mabelgroup.com.ec
 ss -ltnp | grep -E ':80 |:443 '
 ```

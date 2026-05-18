@@ -62,6 +62,8 @@ export interface AuthCapabilities {
   mabel_view?: boolean
   /** true con permiso mabel.view o admin. Botón "Listado Pedidos Originales" para ver/descargar/eliminar archivos Excel en MinIO. */
   can_view_plantillas_originales?: boolean
+  /** true con promocion.sobres.view u operate. Sidebar y rutas del módulo Promoción Sobres. */
+  promocion_sobres_view?: boolean
   [key: string]: boolean | undefined
 }
 
@@ -117,6 +119,7 @@ const MBA3_CAPABILITY_DEFS: { snake: keyof AuthCapabilities; aliases: string[] }
   { snake: 'can_view_order_list', aliases: ['CanViewOrderList'] },
   { snake: 'mabel_view', aliases: ['MabelView'] },
   { snake: 'can_view_plantillas_originales', aliases: ['CanViewPlantillasOriginales'] },
+  { snake: 'promocion_sobres_view', aliases: ['PromocionSobresView', 'CanViewPromocionSobres'] },
 ]
 
 function capabilitiesFromApiCapabilitiesObject(raw: unknown): Partial<AuthCapabilities> {
@@ -141,12 +144,17 @@ function deriveCapabilitiesFromPermissions(permissions: string[], roles: string[
   const odcsap = p.has('odcsap.view')
   const mabel = p.has('mabel.view')
   const odc = p.has('odc.view')
+  const promocionSobres =
+    p.has('promocion.sobres.view') ||
+    p.has('promocion.sobres.operate') ||
+    [...p].some((x) => x.startsWith('promocion.sobres.'))
   return {
     can_view_odc_sap: odc,
     can_manage_order: odcsap,
     can_view_order_list: odcsap,
     mabel_view: mabel,
     can_view_plantillas_originales: mabel || isAdmin,
+    promocion_sobres_view: promocionSobres,
   }
 }
 
@@ -320,7 +328,20 @@ export const useAuthStore = defineStore('auth', {
     /** true solo si capabilities.mabel_view === true (permiso mabel.view). Cargar Plantilla, Redistribución, Procesamiento SAP, Procesos, Homologaciones. Solo leer de capabilities. */
     canViewMabel: (state): boolean => state.capabilities?.mabel_view === true,
     /** true solo si capabilities.can_view_plantillas_originales === true (permiso mabel.view o admin). Botón "Listado Pedidos Originales" en sección Información ODC. */
-    canViewPlantillasOriginales: (state): boolean => state.capabilities?.can_view_plantillas_originales === true
+    canViewPlantillasOriginales: (state): boolean => state.capabilities?.can_view_plantillas_originales === true,
+    /** Sidebar y rutas Promoción Sobres: promocion.sobres.view u operate (o capability del Core). */
+    canViewPromocionSobres: (state): boolean => {
+      if (state.capabilities?.promocion_sobres_view === true) return true
+      const permissions = state.userData?.permissions ?? []
+      return permissions.some((permission) => {
+        const p = String(permission).toLowerCase()
+        return (
+          p === 'promocion.sobres.view' ||
+          p === 'promocion.sobres.operate' ||
+          p.startsWith('promocion.sobres.')
+        )
+      })
+    }
   },
 
   actions: {

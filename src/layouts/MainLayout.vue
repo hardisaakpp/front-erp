@@ -432,6 +432,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import { Pin, PinOff } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
+import { hasPromocionSobresUiPermission } from '../modules/promocion-sobres/permissions'
 import { useThemeStore } from '../stores/theme'
 import ToastContainer from '../components/ToastContainer.vue'
 import { useNotificaciones } from '@/composables/useNotificaciones'
@@ -621,11 +622,8 @@ const hasModuleAccess = (moduleName: string): boolean => {
     })
   }
   if (moduleName === 'promocionsobres') {
-    return permissions.some((permission: string) => {
-      const normalizedPermission = permission.toLowerCase()
-      return normalizedPermission === 'promocion.sobres.operate' ||
-        normalizedPermission.startsWith('promocion.sobres.')
-    })
+    if (authStore.capabilities?.promocion_sobres_view === true) return true
+    return hasPromocionSobresUiPermission(permissions)
   }
   const normalizedModule = moduleName.toLowerCase()
 
