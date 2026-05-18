@@ -197,12 +197,14 @@ RedirectMatch permanent ^/scnexus-front/scan-api/(.*)$ /scan-api/$1
 ProxyPass        /scnexus-front/ http://127.0.0.1:8081/scnexus-front/
 ProxyPassReverse /scnexus-front/ http://127.0.0.1:8081/scnexus-front/
 
-# Mismas APIs que el front pide en el dominio raíz (obligatorio para Articulo Scaner).
+# APIs que el front pide en la raíz del dominio (Core, scan, promoción sobres, etc.).
 # El Nginx del contenedor (`deploy/nginx/scnexus-spa.conf`) hace el proxy final a los backends.
 ProxyPass        /api/             http://127.0.0.1:8081/api/
 ProxyPassReverse /api/             http://127.0.0.1:8081/api/
 ProxyPass        /scan-api/        http://127.0.0.1:8081/scan-api/
 ProxyPassReverse /scan-api/        http://127.0.0.1:8081/scan-api/
+ProxyPass        /promocion-sobres-api/ http://127.0.0.1:8081/promocion-sobres-api/
+ProxyPassReverse /promocion-sobres-api/ http://127.0.0.1:8081/promocion-sobres-api/
 ```
 
 Aplicar:

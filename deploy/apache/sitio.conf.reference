@@ -69,10 +69,12 @@
    ProxyPass        /scnexus-front/ http://127.0.0.1:8081/scnexus-front/ retry=0
    ProxyPassReverse /scnexus-front/ http://127.0.0.1:8081/scnexus-front/
 
-   # APIs mínimas necesarias para Articulo Scaner (incluye login del front).
-   # Nota: se enruta al contenedor; el Nginx interno aplica el proxy final al backend.
+   # APIs del front en la raíz del dominio (no bajo /scnexus-front/).
+   # Se enrutan al contenedor; el Nginx interno (scnexus-spa.conf) hace el proxy final a cada backend.
    ProxyPass        /api/             http://127.0.0.1:8081/api/
    ProxyPassReverse /api/             http://127.0.0.1:8081/api/
    ProxyPass        /scan-api/        http://127.0.0.1:8081/scan-api/
    ProxyPassReverse /scan-api/        http://127.0.0.1:8081/scan-api/
+   ProxyPass        /promocion-sobres-api/ http://127.0.0.1:8081/promocion-sobres-api/
+   ProxyPassReverse /promocion-sobres-api/ http://127.0.0.1:8081/promocion-sobres-api/
 </VirtualHost>
