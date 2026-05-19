@@ -1,3 +1,5 @@
+name: scnexus-front-public-dev
+
 # Levantar antes mba3-consultas (`docker compose up -d`) para que exista la red `mba3-nexus_edge`.
 # El navegador sigue llamando a /mba3-api vía localhost:3000; Vite reenvía al contenedor `mba3-api:8000`.
 services:

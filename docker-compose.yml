@@ -1,4 +1,7 @@
-# Imagen/contenedor: scnexus-front-public (servidor público .39). No confundir con scnexus-front (intranet).
+# Imagen/contenedor/proyecto Compose: scnexus-front-public (servidor público .39).
+# Sin `name:` abajo, Docker Desktop muestra el nombre de la carpeta del repo (scnexus-front).
+name: scnexus-front-public
+
 services:
   scnexus-front-public:
     build:
