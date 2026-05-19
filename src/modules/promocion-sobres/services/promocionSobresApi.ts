@@ -75,7 +75,7 @@ function unwrapSuccess<T>(body: ApiResponse<T> | undefined): { data: T; message:
     const error: UiError = {
       code: 'UNKNOWN',
       message:
-        'Respuesta vacía del servidor (posible caché 304). Recarga la página o reconstruye el contenedor scnexus-front con el proxy de promoción-sobres-api.',
+        'Respuesta vacía del servidor (posible caché 304). Recarga la página o reconstruye el contenedor scnexus-front-public con el proxy de promoción-sobres-api.',
     }
     throw Object.assign(new Error(error.message), { uiError: error })
   }

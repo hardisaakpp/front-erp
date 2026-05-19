@@ -195,10 +195,12 @@ npm run build
 # Los archivos compilados estarán en /dist
 ```
 
-### Docker (imagen unica con multi-stage build)
+### Docker (servidor público — imagen `scnexus-front-public`)
 
-El proyecto incluye `Dockerfile` multi-stage:
+El proyecto incluye `Dockerfile` multi-stage (rama `frontend-dockerizado`):
 
+- **Imagen:** `scnexus-front-public:latest` (distinto de `scnexus-front:latest` en intranet/refactor)
+- **Contenedor:** `scnexus-front-public`
 - **Stage build (Node):** instala dependencias y ejecuta `npm run build`
 - **Stage runtime (Nginx):** sirve solo `dist` con fallback SPA
 
@@ -206,10 +208,10 @@ Comandos:
 
 ```bash
 # Construir imagen
-docker build -t scnexus-front:latest .
+docker build -t scnexus-front-public:latest .
 
 # Ejecutar contenedor (puerto 8081 en el host, 80 en el contenedor)
-docker run --rm -p 8081:80 scnexus-front:latest
+docker run --rm -p 8081:80 --name scnexus-front-public scnexus-front-public:latest
 ```
 
 Tambien puedes usar Compose:

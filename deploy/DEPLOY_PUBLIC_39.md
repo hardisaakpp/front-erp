@@ -18,7 +18,7 @@ Cliente (navegador)
         -> Apache vhost existente (sitio.conf, DocumentRoot /storage)
             -> /sc24/*      (legacy en /storage/sc24)
             -> /checkin/*   (legacy en /storage/checkin)
-            -> /scnexus-front/*  (proxy al contenedor SCNexus en 127.0.0.1:8081)
+            -> /scnexus-front/*  (proxy al contenedor `scnexus-front-public` en 127.0.0.1:8081)
 ```
 
 - **Dominio publico:** `codigoqr.mabelgroup.com.ec`.
@@ -80,7 +80,7 @@ docker compose version
 
 Si tu distro no tiene suite en `download.docker.com` para ese `VERSION_CODENAME`, usar la suite **LTS** mas cercana (por ejemplo `noble`) en la linea `deb ...` segun documentacion Docker.
 
-**Alternativa rapida sin plugin:** `docker build -t scnexus-front:latest .` y `docker run -d --name scnexus-front --restart unless-stopped -p 8081:80 scnexus-front:latest`.
+**Alternativa rapida sin plugin:** `docker build -t scnexus-front-public:latest .` y `docker run -d --name scnexus-front-public --restart unless-stopped -p 8081:80 scnexus-front-public:latest`.
 
 ---
 
@@ -110,12 +110,12 @@ docker compose ps
 Comprobar dentro del contenedor que el bundle salió bajo subruta (debe existir la carpeta y los `src`/ `href` con `/scnexus-front/assets/`):
 
 ```bash
-docker exec scnexus-front ls -la /usr/share/nginx/html/
+docker exec scnexus-front-public ls -la /usr/share/nginx/html/
 # Vite deposita index.html y assets/ en la raíz; el prefijo /scnexus-front/ solo va en URLs del HTML.
-docker exec scnexus-front grep -Eo 'src="/scnexus-front/[^"]+"' /usr/share/nginx/html/index.html | head
+docker exec scnexus-front-public grep -Eo 'src="/scnexus-front/[^"]+"' /usr/share/nginx/html/index.html | head
 ```
 
-Si el HTML carga pero **`/scnexus-front/assets/*.js` devuelve 404**: (1) forzá `docker compose build --no-cache` (evita capas cacheadas de `npm run build` desalineadas con el `index.html`); (2) comprobá que un `src` del `grep` anterior exista en disco: `docker exec scnexus-front ls /usr/share/nginx/html/assets/ | head`; (3) en Apache usá `ProxyPass /scnexus-front/ http://127.0.0.1:8081/scnexus-front/` **con barras finales** (ver `deploy/apache/sitio.conf.reference`).
+Si el HTML carga pero **`/scnexus-front/assets/*.js` devuelve 404**: (1) forzá `docker compose build --no-cache` (evita capas cacheadas de `npm run build` desalineadas con el `index.html`); (2) comprobá que un `src` del `grep` anterior exista en disco: `docker exec scnexus-front-public ls /usr/share/nginx/html/assets/ | head`; (3) en Apache usá `ProxyPass /scnexus-front/ http://127.0.0.1:8081/scnexus-front/` **con barras finales** (ver `deploy/apache/sitio.conf.reference`).
 
 ### Despliegue en raíz del contenedor (sin subruta)
 
@@ -283,7 +283,7 @@ Si `docker compose up` falló con `network mba3-nexus_edge ... could not be foun
 cd /storage/scnexus-front
 docker compose up -d --build    # sin red MBA3 en docker-compose.yml base
 docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.CreatedAt}}"
-docker exec scnexus-front grep -c "promocion-sobres-api" /etc/nginx/conf.d/default.conf
+docker exec scnexus-front-public grep -c "promocion-sobres-api" /etc/nginx/conf.d/default.conf
 # Debe ser >= 1. Si es 0, el contenedor sigue siendo una imagen anterior.
 curl -sI "http://127.0.0.1:8081/promocion-sobres-api/api/promocion-sobres/v1/diagnostics/database"
 # Content-Type debe ser application/json (o 401), NO text/html.
@@ -325,7 +325,7 @@ La segunda línea debe devolver **`application/json`** (p. ej. 401 sin token) o 
 SCAN_API_UPSTREAM=http://192.168.2.153:8080
 ```
 
-Luego `docker compose build --no-cache && docker compose up -d`. Sin `docker compose`, usar `docker build --build-arg SCAN_API_UPSTREAM=http://HOST:PUERTO -t scnexus-front:latest .`
+Luego `docker compose build --no-cache && docker compose up -d`. Sin `docker compose`, usar `docker build --build-arg SCAN_API_UPSTREAM=http://HOST:PUERTO -t scnexus-front-public:latest .`
 
 Desde cualquier cliente con acceso DNS:
 
@@ -359,13 +359,13 @@ O manualmente:
 docker compose down
 docker compose build --no-cache
 docker compose up -d
-docker ps --filter name=scnexus-front
+docker ps --filter name=scnexus-front-public
 ```
 
 Logs:
 
 ```bash
-docker compose logs -f scnexus-front
+docker compose logs -f scnexus-front-public
 tail -f /var/log/apache2/error.log
 ```
 
