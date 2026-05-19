@@ -2,7 +2,7 @@
 # Uso (después de `docker compose up -d` en el repo backend):
 #   docker compose -f docker-compose.yml -f docker-compose.mba3-network.attach.yml up -d
 services:
-  scnexus-front:
+  scnexus-front-public:
     networks:
       - default
       - mba3-nexus_edge

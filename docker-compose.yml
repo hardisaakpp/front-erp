@@ -1,5 +1,6 @@
+# Imagen/contenedor: scnexus-front-public (servidor público .39). No confundir con scnexus-front (intranet).
 services:
-  scnexus-front:
+  scnexus-front-public:
     build:
       context: .
       dockerfile: Dockerfile
@@ -12,8 +13,8 @@ services:
         SCAN_API_UPSTREAM: ${SCAN_API_UPSTREAM:-http://192.168.2.153:8080}
         # scnexus-validacionCI (docker compose / dotnet run en el host, puerto 8083).
         PROMOCION_SOBRES_API_UPSTREAM: ${PROMOCION_SOBRES_API_UPSTREAM:-http://host.docker.internal:8083}
-    image: scnexus-front:latest
-    container_name: scnexus-front
+    image: scnexus-front-public:latest
+    container_name: scnexus-front-public
     ports:
       - "${SCNEXUS_FRONT_PORT:-8081}:80"
     extra_hosts:

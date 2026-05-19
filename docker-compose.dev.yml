@@ -1,9 +1,9 @@
 # Levantar antes mba3-consultas (`docker compose up -d`) para que exista la red `mba3-nexus_edge`.
 # El navegador sigue llamando a /mba3-api vía localhost:3000; Vite reenvía al contenedor `mba3-api:8000`.
 services:
-  scnexus-front-dev:
+  scnexus-front-public-dev:
     image: node:20-alpine
-    container_name: scnexus-front-dev
+    container_name: scnexus-front-public-dev
     working_dir: /app
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 3000"
     environment:
@@ -18,7 +18,7 @@ services:
       - "3000:3000"
     volumes:
       - .:/app
-      - scnexus-front-node-modules:/app/node_modules
+      - scnexus-front-public-node-modules:/app/node_modules
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -32,4 +32,4 @@ networks:
     external: true
 
 volumes:
-  scnexus-front-node-modules:
+  scnexus-front-public-node-modules:
