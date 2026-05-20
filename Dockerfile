@@ -6,25 +6,43 @@ RUN npm ci
 
 COPY . .
 
-# `VITE_APP_BASE_PATH`, `VITE_*` en produccion: proceso en build y tiene prioridad sobre archivos ignorados por git que no llegan en el contexto Docker.
-# Por defecto subruta compartida con legacy (codigoqr); raíz del host: --build-arg VITE_APP_BASE_PATH=/
-ARG VITE_APP_BASE_PATH=/scnexus-front/
+# Plantilla versionada; en servidor puedes montar .env.production antes del build vía build secrets.
+COPY .env.production.example .env.production
+
+# Rutas relativas en el bundle (VITE_*). Sobrescribir en build con --build-arg o ENV.
+ARG VITE_APP_BASE_PATH=/
 ENV VITE_APP_BASE_PATH=${VITE_APP_BASE_PATH}
 
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
-# Upstream del microservicio .NET de scan (GET /api/v1/warehouses, etc.).
-# Default: srv-mabuiosapi (192.168.2.153:8080) → contenedor scnexus-articulo-api.
-# Otro despliegue: docker compose build --build-arg SCAN_API_UPSTREAM=http://HOST:PUERTO
-ARG SCAN_API_UPSTREAM=http://192.168.2.153:8080
-# API Promoción Sobres en el host (scnexus-validacionCI, puerto 8083 por defecto).
-ARG PROMOCION_SOBRES_API_UPSTREAM=http://host.docker.internal:8083
-COPY deploy/nginx/scnexus-spa.conf /tmp/scnexus-spa.conf
-RUN sed -e "s|__SCAN_API_UPSTREAM__|${SCAN_API_UPSTREAM}|g" \
-        -e "s|__PROMOCION_SOBRES_API_UPSTREAM__|${PROMOCION_SOBRES_API_UPSTREAM}|g" \
-        /tmp/scnexus-spa.conf > /etc/nginx/conf.d/default.conf \
-    && rm /tmp/scnexus-spa.conf
+
+# Upstreams (IPs/hostnames alcanzables DESDE el contenedor). Ver .env.docker.example
+ARG MBA3_UPSTREAM=http://host.docker.internal:8000
+ARG CORE_UPSTREAM=http://192.168.2.12:8080
+ARG CAJA_CHICA_UPSTREAM=http://192.168.2.211:8092
+ARG PYG_UPSTREAM=http://host.docker.internal:5171
+ARG SCAN_API_UPSTREAM=http://host.docker.internal:8080
+ARG PROMOCION_SOBRES_UPSTREAM=http://host.docker.internal:8083
+ARG INVENTARIO_UPSTREAM=http://host.docker.internal:8082
+ARG CONCILIACION_UPSTREAM=http://host.docker.internal:8005
+ARG MAESTRO_UPSTREAM=http://host.docker.internal:8001
+ARG SLAYER_UPSTREAM=http://host.docker.internal:8093
+
+COPY deploy/nginx/scnexus-docker.conf.template /tmp/scnexus-docker.conf.template
+RUN sed -e "s|__MBA3_UPSTREAM__|${MBA3_UPSTREAM}|g" \
+        -e "s|__CORE_UPSTREAM__|${CORE_UPSTREAM}|g" \
+        -e "s|__CAJA_CHICA_UPSTREAM__|${CAJA_CHICA_UPSTREAM}|g" \
+        -e "s|__PYG_UPSTREAM__|${PYG_UPSTREAM}|g" \
+        -e "s|__SCAN_API_UPSTREAM__|${SCAN_API_UPSTREAM}|g" \
+        -e "s|__PROMOCION_SOBRES_UPSTREAM__|${PROMOCION_SOBRES_UPSTREAM}|g" \
+        -e "s|__INVENTARIO_UPSTREAM__|${INVENTARIO_UPSTREAM}|g" \
+        -e "s|__CONCILIACION_UPSTREAM__|${CONCILIACION_UPSTREAM}|g" \
+        -e "s|__MAESTRO_UPSTREAM__|${MAESTRO_UPSTREAM}|g" \
+        -e "s|__SLAYER_UPSTREAM__|${SLAYER_UPSTREAM}|g" \
+        /tmp/scnexus-docker.conf.template > /etc/nginx/conf.d/default.conf \
+    && rm /tmp/scnexus-docker.conf.template
+
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

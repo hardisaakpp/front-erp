@@ -10,17 +10,67 @@ import { MAX_EXCEL_UPLOAD_SIZE_BYTES, MAX_EXCEL_UPLOAD_SIZE_MB } from '@/config/
 import { mba3ConsultasService } from '../services/mba3ConsultasApi'
 import { normalizeValidationResponse } from '../services/utils/errorHandler'
 import type { UploadPlantillaResponse, PedidoCompleto, PlantillaProcesoEstado } from '../types'
+import { SAP_MAY_STILL_PROCESSING_MESSAGE } from '../utils/httpErrors'
+import { plantillaStreamUrl } from '../utils/asyncJobStreamUrls'
+import { followAsyncJobSseOrPoll } from '../utils/followAsyncJobSseOrPoll'
 
 // Constantes de configuración
 const ALLOWED_FILE_EXTENSIONS = ['.xlsx', '.xls'] as const
 // ⭐ Intervalo para simulación de progreso durante procesamiento del servidor
 const PROCESSING_PROGRESS_INTERVAL_MS = 500
+/** Porción de la barra reservada a la subida HTTP; el resto refleja procesamiento en servidor/Celery */
+const UPLOAD_PROGRESS_WEIGHT = 25
+const PROCESSING_SIMULATION_CAP = 92
 const PLANTILLA_POLL_INTERVAL_MS = 2000
 const PLANTILLA_WORKER_PICKUP_TIMEOUT_MS = 60000
 const PLANTILLA_PROCESSING_TIMEOUT_MS = 11 * 60 * 1000
 // Rutas explícitas tras subir plantilla / reintentar con correcciones (nunca usar caja-chica u otras rutas)
 const RUTA_CARGAR_PLANTILLA_BASE = '/mba3-consultas/cargar-plantilla'
 const RUTA_PEDIDOS_BASE = '/mba3-consultas/pedidos'
+
+/** Mapea progreso de bytes enviados (0–100) al tramo inicial de la barra */
+export function mapFileUploadProgress(uploadPercent0to100: number): number {
+  const pct = Math.min(100, Math.max(0, uploadPercent0to100))
+  return Math.round((pct / 100) * UPLOAD_PROGRESS_WEIGHT)
+}
+
+/** Mapea progreso reportado por el backend/Celery (0–100) al tramo de procesamiento */
+export function mapServerProcessingProgress(serverPercent0to100: number): number {
+  const pct = Math.min(100, Math.max(0, serverPercent0to100))
+  return Math.round(UPLOAD_PROGRESS_WEIGHT + (pct / 100) * (100 - UPLOAD_PROGRESS_WEIGHT))
+}
+
+const PLANTILLA_STEP_MESSAGES: Record<string, string> = {
+  iniciando: 'Iniciando procesamiento...',
+  leyendo: 'Leyendo archivo Excel...',
+  leyendo_archivo: 'Leyendo archivo Excel...',
+  validando: 'Validando estructura del archivo...',
+  validando_estructura: 'Validando estructura del archivo...',
+  validando_sap: 'Verificando códigos en SAP...',
+  sap: 'Verificando códigos en SAP...',
+  guardando: 'Guardando datos del pedido...',
+  persistiendo: 'Guardando datos del pedido...',
+  finalizando: 'Finalizando procesamiento...',
+}
+
+function messageFromPlantillaStep(step?: string): string | undefined {
+  if (!step) return undefined
+  const key = step.toLowerCase().replace(/-/g, '_')
+  if (PLANTILLA_STEP_MESSAGES[key]) return PLANTILLA_STEP_MESSAGES[key]
+  const partial = Object.entries(PLANTILLA_STEP_MESSAGES).find(([k]) => key.includes(k))
+  return partial?.[1]
+}
+
+function applyPlantillaProcessingUpdate(estado: PlantillaProcesoEstado, refs: {
+  uploadMessage: { value: string }
+  uploadProgress: { value: number }
+}): void {
+  refs.uploadMessage.value =
+    estado.message?.trim() ||
+    messageFromPlantillaStep(estado.step) ||
+    refs.uploadMessage.value
+  refs.uploadProgress.value = mapServerProcessingProgress(estado.progress ?? 0)
+}
 
 /** Prefijo para guardar correcciones a resaltar por pedido (origen de verdad tras redirect en flujo async) */
 export const RESALTADO_CODIGOS_STORAGE_PREFIX = 'resaltado_codigos_'
@@ -110,15 +160,20 @@ export function useFileUpload(options: {
    */
   function updateUploadMessage(fase: 'upload' | 'processing', progress: number) {
     if (fase === 'upload') {
-      uploadMessage.value = progress < 50 
-        ? 'Subiendo archivo al servidor...' 
-        : 'Finalizando carga del archivo...'
-    } else {
-      if (progress < 80) {
+      const uploadPct =
+        UPLOAD_PROGRESS_WEIGHT > 0
+          ? Math.round((progress / UPLOAD_PROGRESS_WEIGHT) * 100)
+          : progress
+      uploadMessage.value =
+        uploadPct < 50
+          ? 'Subiendo archivo al servidor...'
+          : 'Finalizando carga del archivo...'
+    } else if (!uploadMessage.value || uploadMessage.value === 'Preparando archivo...') {
+      if (progress < 45) {
         uploadMessage.value = 'Validando estructura del archivo...'
-      } else if (progress < 90) {
+      } else if (progress < 70) {
         uploadMessage.value = 'Verificando códigos en SAP...'
-      } else if (progress < 95) {
+      } else if (progress < 90) {
         uploadMessage.value = 'Guardando datos del pedido...'
       } else {
         uploadMessage.value = 'Finalizando procesamiento...'
@@ -132,71 +187,66 @@ export function useFileUpload(options: {
   ): Promise<UploadPlantillaResponse> {
     uploadFase.value = 'processing'
     uploadMessage.value = initialMessage
-    uploadProgress.value = Math.max(uploadProgress.value, 90)
+    uploadProgress.value = Math.max(uploadProgress.value, UPLOAD_PROGRESS_WEIGHT)
 
-    const startedAt = Date.now()
-    let workerStarted = false
-
-    for (;;) {
-      await new Promise(resolve => setTimeout(resolve, PLANTILLA_POLL_INTERVAL_MS))
-
-      const elapsedMs = Date.now() - startedAt
-      if (elapsedMs > PLANTILLA_PROCESSING_TIMEOUT_MS) {
-        throw new Error('La plantilla sigue en procesamiento y excedió el tiempo máximo de espera. Verifica el worker de Celery e intenta consultar el pedido más tarde.')
-      }
-
-      const pollResult = await mba3ConsultasService.getResultadoPlantilla(processId)
-      if (pollResult.status === 'processing') {
-        const estado = pollResult as PlantillaProcesoEstado
+    const pollResult = await followAsyncJobSseOrPoll(plantillaStreamUrl(processId), {
+      pollIntervalMs: PLANTILLA_POLL_INTERVAL_MS,
+      maxWaitMs: PLANTILLA_PROCESSING_TIMEOUT_MS,
+      maxWaitMessage: SAP_MAY_STILL_PROCESSING_MESSAGE,
+      workerPickupTimeoutMs: PLANTILLA_WORKER_PICKUP_TIMEOUT_MS,
+      workerNotStartedMessage:
+        'El worker de Celery no tomó la plantilla en el tiempo esperado. El procesamiento en segundo plano parece estar detenido.',
+      poll: () => mba3ConsultasService.getResultadoPlantilla(processId),
+      isProcessing: (result) => result.status === 'processing',
+      hasWorkerStarted: (result) => {
+        if (result.status !== 'processing') return false
+        const estado = result as PlantillaProcesoEstado
         const serverProgress = estado.progress ?? 0
         const serverStep = estado.step ?? ''
-
-        if (serverProgress > 0 || (serverStep && serverStep !== 'iniciando')) {
-          workerStarted = true
+        return serverProgress > 0 || !!(serverStep && serverStep !== 'iniciando')
+      },
+      getTerminalError: (result) => {
+        if (result.status === 'error' && 'error' in result) {
+          const err: any = new Error(
+            (result as PlantillaProcesoEstado).error || (result as PlantillaProcesoEstado).message
+          )
+          err.response = { data: result }
+          return err
         }
+        return null
+      },
+      onUpdate: (result) => {
+        if (result.status !== 'processing') return
+        applyPlantillaProcessingUpdate(result as PlantillaProcesoEstado, {
+          uploadMessage,
+          uploadProgress,
+        })
+      },
+    })
 
-        if (!workerStarted && elapsedMs > PLANTILLA_WORKER_PICKUP_TIMEOUT_MS) {
-          throw new Error('El worker de Celery no tomó la plantilla en el tiempo esperado. El procesamiento en segundo plano parece estar detenido.')
-        }
-
-        uploadMessage.value = estado.message || uploadMessage.value
-        uploadProgress.value = Math.max(uploadProgress.value, serverProgress)
-        continue
-      }
-
-      if (pollResult.status === 'error' && 'error' in pollResult) {
-        const err: any = new Error((pollResult as PlantillaProcesoEstado).error || (pollResult as PlantillaProcesoEstado).message)
-        err.response = { data: pollResult }
-        throw err
-      }
-
-      uploadProgress.value = 100
-      uploadFase.value = 'complete'
-      uploadMessage.value = 'Procesamiento completado'
-      await new Promise(resolve => setTimeout(resolve, 400))
-      return pollResult as UploadPlantillaResponse
-    }
+    uploadProgress.value = 100
+    uploadFase.value = 'complete'
+    uploadMessage.value = 'Procesamiento completado'
+    await new Promise(resolve => setTimeout(resolve, 400))
+    return pollResult as UploadPlantillaResponse
   }
   
   /**
-   * Inicia la simulación de progreso durante el procesamiento del servidor
-   * El progreso va de 70% a 95% mientras esperamos la respuesta
+   * Simulación suave solo en upload síncrono (sin progreso del servidor durante el POST).
+   * Avanza de 25% a 92% como indicador visual; el 100% llega al recibir la respuesta HTTP.
    */
   function startProcessingProgressSimulation() {
-    // Limpiar intervalo anterior si existe
     if (processingProgressInterval) {
       clearInterval(processingProgressInterval)
     }
-    
+
     uploadFase.value = 'processing'
-    let currentProgress = 70
-    
+    let currentProgress = Math.max(uploadProgress.value, UPLOAD_PROGRESS_WEIGHT)
+
     processingProgressInterval = setInterval(() => {
-      // Incrementar progreso gradualmente hasta 95%
-      if (currentProgress < 95) {
-        // Incremento más lento a medida que se acerca al 95%
-        const increment = currentProgress < 85 ? 2 : (currentProgress < 92 ? 1 : 0.5)
-        currentProgress = Math.min(95, currentProgress + increment)
+      if (currentProgress < PROCESSING_SIMULATION_CAP) {
+        const increment = currentProgress < 50 ? 2 : currentProgress < 75 ? 1 : 0.5
+        currentProgress = Math.min(PROCESSING_SIMULATION_CAP, currentProgress + increment)
         uploadProgress.value = Math.round(currentProgress)
         updateUploadMessage('processing', currentProgress)
       }
@@ -957,9 +1007,12 @@ export function useFileUpload(options: {
     try {
       const handleProgress = (progress: number, fase: 'upload' | 'processing') => {
         if (fase === 'upload') {
-          uploadProgress.value = progress
+          const normalizedUploadPct = options?.useAsyncUpload
+            ? progress
+            : Math.min(100, Math.round((progress / 70) * 100))
+          uploadProgress.value = mapFileUploadProgress(normalizedUploadPct)
           uploadFase.value = 'upload'
-          updateUploadMessage('upload', progress)
+          updateUploadMessage('upload', uploadProgress.value)
           if (!options?.useAsyncUpload && progress >= 70) {
             startProcessingProgressSimulation()
           }
@@ -1190,12 +1243,9 @@ export function useFileUpload(options: {
     try {
       const handleProgress = (progress: number, fase: 'upload' | 'processing') => {
         if (fase === 'upload') {
-          uploadProgress.value = progress
+          uploadProgress.value = mapFileUploadProgress(progress)
           uploadFase.value = 'upload'
-          updateUploadMessage('upload', progress)
-          if (progress >= 70) {
-            startProcessingProgressSimulation()
-          }
+          updateUploadMessage('upload', uploadProgress.value)
         } else if (fase === 'processing') {
           stopProcessingProgressSimulation(true)
         }

@@ -49,3 +49,27 @@ export interface UiError {
   message: string
   correlationId?: string
 }
+
+export interface BeneficiarioEntregadoItemDto {
+  identificacion: string
+  nombre: string
+  entregado: 0 | 1
+  fechaModificacion?: string | null
+  modificadoPor?: string | null
+}
+
+export interface DatabaseOrigenDto {
+  dataSource: string
+  database: string
+  schema: string
+  tablaBeneficiarios: string
+}
+
+export interface EntregadosMonitoreoDto {
+  totalEntregados: number
+  totalPendientes: number
+  totalBeneficiarios: number
+  consultadoEn: string
+  origen?: DatabaseOrigenDto
+  beneficiarios: BeneficiarioEntregadoItemDto[]
+}

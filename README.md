@@ -58,6 +58,7 @@ Sistema completo de gestión de pedidos, órdenes de compra y despachos.
   - Polling automático de despachos
   - Gestión de homologaciones SKU
   - Procesamiento de órdenes de compra
+- **Alineación async con backend:** [docs/ALINEACION_FRONT_ASYNC.md](docs/ALINEACION_FRONT_ASYNC.md) (contrato Celery/polling/SSE; backend: `mba3-consultas/docs/ALINEACION_FRONT_ASYNC.md`)
 
 ### Usuarios, Roles y Permisos
 Sistema completo de gestión de acceso (RBAC).
@@ -81,6 +82,7 @@ Sistema completo de gestión de acceso (RBAC).
 - **[Índice de Documentación](docs/README.md)** - Documentación técnica completa
 
 ### Documentación Técnica
+- [Timeouts y envío a SAP (frontend ↔ backend)](docs/timeout-sincronizado-frontend-backend.md)
 - [Optimización de Estados ODC](docs/optimizacion-estados-odc.md)
 - [Polling Automático de Despachos](docs/polling-automatico-despachos.md)
 - [Refactorización Pedido Detalle](docs/REFACTORIZACION_PEDIDO_DETALLE.md)
@@ -195,79 +197,19 @@ npm run build
 # Los archivos compilados estarán en /dist
 ```
 
-### Docker (servidor público — imagen `scnexus-front-public`)
-
-El proyecto incluye `Dockerfile` multi-stage (rama `frontend-dockerizado`):
-
-- **Imagen:** `scnexus-front-public:latest` (distinto de `scnexus-front:latest` en intranet/refactor)
-- **Contenedor:** `scnexus-front-public`
-- **Stage build (Node):** instala dependencias y ejecuta `npm run build`
-- **Stage runtime (Nginx):** sirve solo `dist` con fallback SPA
-
-Comandos:
+### Docker (intranet)
 
 ```bash
-# Construir imagen
-docker build -t scnexus-front-public:latest .
-
-# Ejecutar contenedor (puerto 8081 en el host, 80 en el contenedor)
-docker run --rm -p 8081:80 --name scnexus-front-public scnexus-front-public:latest
-```
-
-Tambien puedes usar Compose:
-
-```bash
-# Produccion/local runtime (nginx, imagen final)
-# Opcional: en `.env` junto al compose, `SCAN_API_UPSTREAM=http://HOST:PUERTO` (API .NET de scan; ver docker-compose.yml).
-docker compose up -d --build
-
-# Desarrollo (Vite + proxy, sin nginx)
+cp .env.docker.example .env
+# Desarrollo (Vite :3000)
 docker compose -f docker-compose.dev.yml up -d
-```
-
-Por defecto el contenedor publica en `8081`. Si necesitas otro puerto:
-
-```bash
-SCNEXUS_FRONT_PORT=8090 docker compose up -d --build
-```
-
-En PowerShell:
-
-```powershell
-$env:SCNEXUS_FRONT_PORT=8090
+# Producción (Nginx + SPA :8081)
 docker compose up -d --build
 ```
 
-### Regla recomendada por entorno
+Guía completa: [docs/DOCKER.md](docs/DOCKER.md)
 
-- **Desarrollo:** usar `docker-compose.dev.yml` (Vite en `http://localhost:3000`), sin Nginx.
-- **Produccion/preproduccion:** usar imagen final con Nginx (`docker compose up -d --build` o despliegue en servidor).
-
-Si en desarrollo ves errores tipo *"HTML en lugar de JSON"*, normalmente estas levantando el runtime de Nginx (`:8081`) en lugar del dev server de Vite (`:3000`).
-
-### Estrategia recomendada de despliegue en produccion
-
-Para minimizar riesgo, mantener el `nginx` actual del servidor (por ejemplo `deploy/nginx/scnexus.conf.example`) y usar Docker para estandarizar build/runtime del frontend:
-
-1. Construir la imagen Docker en CI/CD o en servidor.
-2. Extraer/publicar `dist` o levantar el contenedor de frontend en un puerto interno.
-3. Mantener en `nginx` productivo las reglas de proxy existentes (`/api`, `/scan-api`, `/uploads`, SSE, etc.).
-4. Validar rutas criticas y fallback SPA antes de liberar.
-
-> Nota: si migras todo el runtime a contenedor, evita usar `127.0.0.1` en `proxy_pass` para servicios externos al contenedor. En Docker, `127.0.0.1` apunta al mismo contenedor.
-
-### Contexto actual de servidores
-
-- `192.168.2.153`: entorno actual en produccion (no reemplazar con este proyecto).
-- `192.168.2.39`: servidor de aplicaciones publicas donde se desplegara esta version dockerizada.
-
-**Runbook paso a paso (clone, Docker, Apache + HTTPS por dominio, validacion):** [deploy/DEPLOY_PUBLIC_39.md](deploy/DEPLOY_PUBLIC_39.md)
-
-Recomendacion operativa:
-
-1. Mantener configuraciones y artefactos separados por servidor.
-2. No reutilizar el mismo `server_name`, puertos ni rutas de despliegue entre `153` y `39`.
-3. Publicar este frontend en `192.168.2.39` como sitio independiente (con su propio bloque `server` en Nginx o virtual host equivalente).
+Despliegue en servidor público (`.39`, subruta `/scnexus-front/`): [deploy/DEPLOY_PUBLIC_39.md](deploy/DEPLOY_PUBLIC_39.md)
 
 ### Variables de Entorno
 
@@ -286,7 +228,7 @@ VITE_PREFERENCES_API_URL=/api/mba3
 VITE_APP_NAME=SCNexus
 ```
 
-**📖 Referencia completa:** [docs/PRODUCTION_ENV_CHECKLIST.md](docs/PRODUCTION_ENV_CHECKLIST.md)
+**📖 Referencias:** [docs/ENV.md](docs/ENV.md) (dev + prod) · [docs/PRODUCTION_ENV_CHECKLIST.md](docs/PRODUCTION_ENV_CHECKLIST.md) · [docs/DOCKER.md](docs/DOCKER.md)
 
 ## 🤝 Colaboración
 

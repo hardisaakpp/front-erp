@@ -1,27 +1,28 @@
-# Imagen/contenedor/proyecto Compose: scnexus-front-public (servidor público .39).
-# Sin `name:` abajo, Docker Desktop muestra el nombre de la carpeta del repo (scnexus-front).
-name: scnexus-front-public
+# Producción / preproducción intranet: imagen con Nginx + SPA + proxy a backends.
+# Copiar .env.docker.example → .env y ajustar IPs antes de build.
+name: scnexus-front
 
 services:
-  scnexus-front-public:
+  scnexus-front:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        # Subruta bajo mismo dominio (Apache + legacy en codigoqr). Sin esto, el HTML pide /assets/* en la raíz y Apache devuelve 404 (no pasa al contenedor).
-        # Despliegue solo esta SPA en la raíz del host: en `.env` definir `VITE_APP_BASE_PATH=/`.
-        VITE_APP_BASE_PATH: ${VITE_APP_BASE_PATH:-/scnexus-front/}
-        # Nginx: proxy de /scan-api/* hacia el .NET de escaneo (sin slash final en la URL).
-        # 192.168.2.153 = srv-mabuiosapi (contenedor scnexus-articulo-api en :8080).
-        SCAN_API_UPSTREAM: ${SCAN_API_UPSTREAM:-http://192.168.2.153:8080}
-        # scnexus-validacionCI (docker compose / dotnet run en el host, puerto 8083).
-        PROMOCION_SOBRES_API_UPSTREAM: ${PROMOCION_SOBRES_API_UPSTREAM:-http://host.docker.internal:8083}
-    image: scnexus-front-public:latest
-    container_name: scnexus-front-public
+        VITE_APP_BASE_PATH: ${VITE_APP_BASE_PATH:-/}
+        MBA3_UPSTREAM: ${MBA3_UPSTREAM:-http://host.docker.internal:8000}
+        CORE_UPSTREAM: ${CORE_UPSTREAM:-http://192.168.2.12:8080}
+        CAJA_CHICA_UPSTREAM: ${CAJA_CHICA_UPSTREAM:-http://192.168.2.211:8092}
+        PYG_UPSTREAM: ${PYG_UPSTREAM:-http://host.docker.internal:5171}
+        SCAN_API_UPSTREAM: ${SCAN_API_UPSTREAM:-http://host.docker.internal:8080}
+        PROMOCION_SOBRES_UPSTREAM: ${PROMOCION_SOBRES_UPSTREAM:-http://host.docker.internal:8083}
+        INVENTARIO_UPSTREAM: ${INVENTARIO_UPSTREAM:-http://host.docker.internal:8082}
+        CONCILIACION_UPSTREAM: ${CONCILIACION_UPSTREAM:-http://host.docker.internal:8005}
+        MAESTRO_UPSTREAM: ${MAESTRO_UPSTREAM:-http://host.docker.internal:8001}
+        SLAYER_UPSTREAM: ${SLAYER_UPSTREAM:-http://host.docker.internal:8093}
+    image: scnexus-front:latest
+    container_name: scnexus-front
     ports:
       - "${SCNEXUS_FRONT_PORT:-8081}:80"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
-
-# Red MBA3 opcional (dev): docker compose -f docker-compose.yml -f docker-compose.mba3-network.attach.yml up -d
