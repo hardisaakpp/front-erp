@@ -21,7 +21,7 @@ fi
 if [[ ! -f .env ]]; then
   cat > .env <<'EOF'
 VITE_APP_BASE_PATH=/scnexus-front/
-PROMOCION_SOBRES_API_UPSTREAM=http://host.docker.internal:8083
+PROMOCION_SOBRES_UPSTREAM=http://host.docker.internal:8083
 EOF
   echo "Creado .env"
 fi

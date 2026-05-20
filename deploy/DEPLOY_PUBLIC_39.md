@@ -102,6 +102,7 @@ Construcción y arranque (recomendado forzar rebuild del stage de build tras cam
 
 ```bash
 cd /storage/scnexus-front
+docker compose down
 docker compose build --no-cache
 docker compose up -d
 docker compose ps
@@ -123,6 +124,7 @@ Si no necesitás subruta, omití `VITE_APP_BASE_PATH` en `.env` o usá `/` expli
 
 ```bash
 cd /storage/scnexus-front
+docker compose down
 docker compose up -d --build
 docker compose ps
 ```
@@ -377,12 +379,35 @@ tail -f /var/log/apache2/error.log
 cd /storage/scnexus-front
 git log --oneline -n 10
 git checkout <commit_estable>
+docker compose down
 docker compose up -d --build
 ```
 
 ---
 
 ## 9) Notas y referencias
+
+### Puerto 8081 ocupado
+
+El build puede terminar en **FINISHED** y aun así fallar el arranque con:
+
+`Bind for 0.0.0.0:8081 failed: port is already allocated`
+
+Causa habitual: el contenedor anterior (`scnexus-front-public` u otro) sigue usando el puerto. La imagen nueva ya está construida; solo falta reemplazar el contenedor.
+
+```bash
+cd /storage/scnexus-front
+docker ps --format 'table {{.Names}}\t{{.Ports}}' | grep 8081
+# Detener lo que ocupa 8081 (elige según el nombre que aparezca):
+docker compose down
+# Si compose no lo baja (contenedor huérfano creado con docker run):
+docker stop scnexus-front-public 2>/dev/null || true
+docker rm scnexus-front-public 2>/dev/null || true
+docker compose up -d
+docker ps --filter name=scnexus-front-public
+```
+
+No hace falta `build --no-cache` otra vez si el log anterior ya mostró `Built` / `FINISHED`; `docker compose up -d` reutiliza la imagen recién creada.
 
 ### Ajuste obligatorio de build para subruta
 
