@@ -1,5 +1,8 @@
 import type { RouteRecordRaw } from 'vue-router'
-import { PROMOCION_SOBRES_ROUTE_PERMISSIONS } from './permissions'
+import {
+  PROMOCION_SOBRES_OPERATE_PERMISSIONS,
+  PROMOCION_SOBRES_ROUTE_PERMISSIONS
+} from './permissions'
 
 const routes: RouteRecordRaw[] = [
   {
