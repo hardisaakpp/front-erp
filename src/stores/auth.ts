@@ -147,6 +147,7 @@ function deriveCapabilitiesFromPermissions(permissions: string[], roles: string[
   const promocionSobres =
     p.has('promocion.sobres.view') ||
     p.has('promocion.sobres.operate') ||
+    p.has('boton-monitorear.view') ||
     [...p].some((x) => x.startsWith('promocion.sobres.'))
   return {
     can_view_odc_sap: odc,
@@ -338,6 +339,7 @@ export const useAuthStore = defineStore('auth', {
         return (
           p === 'promocion.sobres.view' ||
           p === 'promocion.sobres.operate' ||
+          p === 'boton-monitorear.view' ||
           p.startsWith('promocion.sobres.')
         )
       })

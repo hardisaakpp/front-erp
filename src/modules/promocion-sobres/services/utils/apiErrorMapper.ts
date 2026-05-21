@@ -110,7 +110,7 @@ export function mapPromocionSobresApiError(error: unknown): UiError {
       code: 'FORBIDDEN',
       message:
         backendMessage ??
-          'Sin permiso para usar promoción sobres. Se requiere promocion.sobres.operate (o promocion.sobres.view si el API lo admite) en el JWT de Core.',
+        'Sin permiso. Entrega: promocion.sobres.operate (o promocion.sobres.view). Monitoreo: boton-monitorear.view.',
       correlationId
     }
   }

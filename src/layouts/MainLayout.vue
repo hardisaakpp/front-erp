@@ -195,7 +195,7 @@
         <!-- Promoción Sobres -->
         <router-link
           v-if="hasModuleAccess('promocionsobres')"
-          to="/promocion-sobres/entrega"
+          :to="promocionSobresSidebarTo"
           class="group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative overflow-hidden"
           :class="{
             'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-500/50': $route.path.startsWith('/promocion-sobres'),
@@ -432,12 +432,15 @@ import {
 } from '@heroicons/vue/24/outline'
 import { Pin, PinOff } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
-import { hasPromocionSobresUiPermission } from '../modules/promocion-sobres/permissions'
 import { useThemeStore } from '../stores/theme'
 import ToastContainer from '../components/ToastContainer.vue'
 import { useNotificaciones } from '@/composables/useNotificaciones'
 import { useOdcSapVolver } from '@/composables/useOdcSapVolver'
 import OdcSapVolverButton from '@/modules/mba3-consultas/components/OdcSapVolverButton.vue'
+import {
+  hasPromocionSobresUiPermission,
+  promocionSobresDefaultPath
+} from '@/modules/promocion-sobres/permissions'
 
 const router = useRouter()
 const route = useRoute()
@@ -582,6 +585,7 @@ const pageTitle = computed(() => {
     '/inventario/planificaciones': 'Planificación de Inventario',
     '/inventario/generados': 'Inventarios Generados',
     '/promocion-sobres/entrega': 'Promoción Sobres',
+    '/promocion-sobres/monitoreo': 'Monitoreo entregas',
     '/mba3-consultas/ordenes-compra': 'Órdenes de Compra',
     '/mba3-consultas/proceso': 'Enviar ODC a SAP',
     '/usuarios': 'Gestión de Usuarios',
@@ -595,6 +599,10 @@ const logout = () => {
   authStore.logout()
   router.push('/login')
 }
+
+const promocionSobresSidebarTo = computed(() =>
+  promocionSobresDefaultPath(authStore.userPermissions || [])
+)
 
 const hasModuleAccess = (moduleName: string): boolean => {
   if (authStore.userRoles?.includes('Admin')) {
