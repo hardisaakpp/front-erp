@@ -1,9 +1,28 @@
-export const LOGIN_REDIRECT_URL =
-  (import.meta.env.VITE_LOGIN_REDIRECT_URL as string) ||
-  `${typeof window !== 'undefined' ? window.location.origin : ''}/login`
+function normalizeAppBasePath(): string {
+  const raw = import.meta.env.VITE_APP_BASE_PATH || '/'
+  const withLeading = raw.startsWith('/') ? raw : `/${raw}`
+  return withLeading.endsWith('/') ? withLeading : `${withLeading}/`
+}
+
+/** Ruta absoluta del login según VITE_APP_BASE_PATH (p. ej. `/scnexus-front/login`). */
+export function getLoginPath(): string {
+  const base = normalizeAppBasePath()
+  if (base === '/') return '/login'
+  return `${base.replace(/\/$/, '')}/login`
+}
+
+export function buildLoginRedirectUrl(): string {
+  const explicit = import.meta.env.VITE_LOGIN_REDIRECT_URL as string
+  if (explicit) return explicit
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  return `${origin}${getLoginPath()}`
+}
+
+export const LOGIN_REDIRECT_URL = buildLoginRedirectUrl()
 
 function isLoginPath(pathname: string): boolean {
-  return pathname === '/login' || pathname.startsWith('/login/')
+  const loginPath = getLoginPath()
+  return pathname === loginPath || pathname.startsWith(`${loginPath}/`)
 }
 
 export function clearStoredSession(): void {
@@ -16,7 +35,7 @@ export function clearStoredSession(): void {
 export function redirectToLogin(): void {
   if (typeof window === 'undefined') return
   if (isLoginPath(window.location.pathname)) return
-  window.location.href = LOGIN_REDIRECT_URL
+  window.location.href = buildLoginRedirectUrl()
 }
 
 export function attachUnauthorizedRedirect(

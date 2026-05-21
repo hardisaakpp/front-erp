@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { attachUnauthorizedRedirect } from '@/services/sessionGuard'
+import { redirectToLogin, clearStoredSession } from '@/services/sessionGuard'
 import type {
   AppResponse,
   DashboardMetricas,
@@ -63,9 +63,8 @@ api.interceptors.response.use(
       console.error(`❌ [Conciliacion API] Error:`, error.message, error.response?.data)
     }
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+      clearStoredSession()
+      redirectToLogin()
     }
     return Promise.reject(error)
   },
