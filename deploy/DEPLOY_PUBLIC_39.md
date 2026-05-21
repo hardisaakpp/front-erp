@@ -90,13 +90,25 @@ Si tu distro no tiene suite en `download.docker.com` para ese `VERSION_CODENAME`
 
 `.env.production` esta **en `.gitignore`**: despues de `git pull` el servidor suele construir sin esas vars. El Dockerfile ahora admite **`VITE_APP_BASE_PATH` como build-arg** desde `docker-compose.yml`.
 
-Creá en **`/storage/scnexus-front/.env`** (junto al `compose`, no commiteado) al menos:
+Creá en **`/storage/scnexus-front/.env`** (junto al `compose`, no commiteado). **Plantilla validada para .39:**
+
+```bash
+cp .env.docker.39.example .env
+# Revisar IPs si cambió algún backend
+```
+
+Mínimo obligatorio (los `*_UPSTREAM` se **hornean** en Nginx al `docker compose build`; sin ellos `/api/Auth/me` apunta a `host.docker.internal:8000` y suele dar **504**):
 
 ```env
 VITE_APP_BASE_PATH=/scnexus-front/
+MBA3_UPSTREAM=http://192.168.2.153:8000
+SCAN_API_UPSTREAM=http://192.168.2.153:8080
+PROMOCION_SOBRES_UPSTREAM=http://192.168.2.153:8083
 ```
 
-Opcional: copiá el resto de variables de `.env.production.example` ahí mismo o mantené un `.env.production` solo en servidor; el build-arg vuelve a exportar **`VITE_APP_BASE_PATH`** dentro de la imagen antes de `npm run build`.
+`PROMOCION_SOBRES_UPSTREAM` debe ser la IP:puerto del API **alcanzable desde el contenedor** `scnexus-front` (típicamente `srv-mabuiosapi:8083`). `host.docker.internal` en Linux suele provocar **504** a los 120 s aunque `curl http://127.0.0.1:8083` en el host del API responda bien.
+
+Atajo de despliegue completo: `bash deploy/server-39-redeploy.sh` (pull, limpia `scnexus-front-public`, build, verifica Auth/me).
 
 Construcción y arranque (recomendado forzar rebuild del stage de build tras cambiar base path):
 
@@ -291,14 +303,34 @@ curl -sI "http://127.0.0.1:8081/promocion-sobres-api/api/promocion-sobres/v1/dia
 # Content-Type debe ser application/json (o 401), NO text/html.
 ```
 
-En `.env` junto al compose (servidor):
+En `.env` junto al compose (servidor), usar **`.env.docker.39.example`** como base (incluye `MBA3_UPSTREAM`, `SCAN_API_UPSTREAM`, etc.).
 
-```env
-VITE_APP_BASE_PATH=/scnexus-front/
-PROMOCION_SOBRES_API_UPSTREAM=http://host.docker.internal:8083
+El API `scnexus-validacionCI` debe estar escuchando en **`srv-mabuiosapi` (192.168.2.153:8083** por defecto), no necesariamente en el mismo host que el front (.39).
+
+**Promoción sobres (504 tras ~120 s en el navegador):**
+
+Síntoma: `curl` a `https://codigoqr.../promocion-sobres-api/...` devuelve **504** nginx tras ~120 s, pero en el servidor del API `curl http://127.0.0.1:8083/...` responde en pocos segundos.
+
+Causa habitual: `PROMOCION_SOBRES_UPSTREAM` incorrecto en `.env` del front (p. ej. `host.docker.internal:8083` cuando el API está en otra máquina).
+
+En **.39** (`/storage/scnexus-front`):
+
+```bash
+grep PROMOCION_SOBRES_UPSTREAM .env
+docker exec scnexus-front grep -A2 'location /promocion-sobres-api' /etc/nginx/conf.d/default.conf
+curl -sI -m 15 "http://127.0.0.1:8081/promocion-sobres-api/health/ready"
+# Esperado: 200 + Healthy (rápido). Si 504 o >15s → rebuild con IP correcta:
+#   PROMOCION_SOBRES_UPSTREAM=http://192.168.2.153:8083
+docker compose build --no-cache && docker compose up -d
 ```
 
-El API `scnexus-validacionCI` debe estar escuchando en el host en el puerto configurado (`8083` por defecto).
+**Auth/me (504 en el navegador):** GET `/api/Auth/me` va a **`MBA3_UPSTREAM`**, no a Core. Tras cada rebuild, comprobar:
+
+```bash
+docker exec scnexus-front grep -A1 'location = /api/Auth/me' /etc/nginx/conf.d/default.conf
+curl -sI -m 15 "http://127.0.0.1:8081/api/Auth/me"
+# Esperado: 401 + application/json. Si 504 HTML → MBA3_UPSTREAM incorrecto o MBA3 caído en 192.168.2.153:8000
+```
 
 ### 6.2 Permiso en Core (botón sidebar)
 
@@ -315,6 +347,7 @@ En el servidor:
 
 ```bash
 curl -I http://127.0.0.1:8081
+curl -sI -m 15 "http://127.0.0.1:8081/api/Auth/me"
 curl -sI "http://127.0.0.1:8081/scan-api/api/v1/warehouses"
 curl -sI "http://127.0.0.1:8081/promocion-sobres-api/api/promocion-sobres/v1/diagnostics/database"
 curl -I https://codigoqr.mabelgroup.com.ec
@@ -411,6 +444,20 @@ docker ps --filter name=scnexus-front
 
 No hace falta `build --no-cache` otra vez si el log anterior ya mostró `Built` / `FINISHED`; `docker compose up -d` reutiliza la imagen recién creada.
 
+### `/api/Auth/me` devuelve 504 (Gateway Time-out)
+
+Síntoma en DevTools: `GET .../api/Auth/me 504`, cada intento ~60 s, login lento.
+
+Causa: el contenedor nuevo se construyó con **`MBA3_UPSTREAM` por defecto** (`host.docker.internal:8000`) porque `.env` no tenía la IP de MBA3 en `192.168.2.153`. La imagen anterior (`scnexus-front-public`) podía tener upstreams distintos horneados.
+
+```bash
+cd /storage/scnexus-front
+cp .env.docker.39.example .env   # o fusionar MBA3_UPSTREAM y SCAN_API_UPSTREAM en tu .env
+docker compose build --no-cache
+docker compose up -d
+curl -sI -m 15 "http://127.0.0.1:8081/api/Auth/me" | head -5
+```
+
 ### Ajuste obligatorio de build para subruta
 
 SCNexus debe construirse con base path de subruta para convivir en el mismo dominio legacy:
@@ -448,7 +495,7 @@ git show --name-only --oneline HEAD
 
 ### Nginx en el contenedor vs Apache en el host
 
-El `Dockerfile` copia `deploy/nginx/scnexus-spa.conf` al contenedor. Ese archivo incluye proxies a backends internos (IPs de red corporativa). Si en `39` las APIs no son alcanzables desde la red Docker, apareceran `502` en ciertas rutas: hay que alinear IPs/hostnames con el entorno real o replicar en Apache reglas similares a `deploy/nginx/scnexus.conf.example` **antes** del proxy al frontend.
+El `Dockerfile` genera Nginx desde `deploy/nginx/scnexus-docker.conf.template` sustituyendo `*_UPSTREAM` con los build-args de `.env`. Si en `.39` las APIs no son alcanzables **desde el contenedor**, aparecerán **504/502** (p. ej. `/api/Auth/me` → MBA3): alinear `.env` con `.env.docker.39.example` y hacer `docker compose build --no-cache`.
 
 ### Referencia Nginx-only (si en el futuro no se usa Apache en 39)
 

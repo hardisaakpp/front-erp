@@ -147,6 +147,18 @@ export function mapPromocionSobresApiError(error: unknown): UiError {
     }
   }
 
+  if (status === 502 || status === 503 || status === 504) {
+    return {
+      code: 'SERVER',
+      message:
+        status === 504
+          ? 'El proxy no alcanza la API de promoción sobres (504). En el servidor del front, revise PROMOCION_SOBRES_UPSTREAM (IP:8083 del API, p. ej. http://192.168.2.153:8083) y vuelva a construir el contenedor scnexus-front.'
+          : (backendMessage ??
+            'El gateway no pudo completar la solicitud. Intente de nuevo en unos momentos.'),
+      correlationId
+    }
+  }
+
   if (status && status >= 500) {
     return {
       code: 'SERVER',
