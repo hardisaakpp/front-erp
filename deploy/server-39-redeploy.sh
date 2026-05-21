@@ -26,14 +26,16 @@ EOF
   echo "Creado .env"
 fi
 
-echo "==> Build y arranque"
+echo "==> Build y arranque (limpia nombre antiguo scnexus-front-public si existe)"
+docker stop scnexus-front-public 2>/dev/null || true
+docker rm scnexus-front-public 2>/dev/null || true
 docker compose down || true
 docker compose build --no-cache
 docker compose up -d
 
 echo "==> Verificación contenedor"
-docker ps --filter name=scnexus-front-public --format 'table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}'
-COUNT=$(docker exec scnexus-front-public grep -c 'promocion-sobres-api' /etc/nginx/conf.d/default.conf || true)
+docker ps --filter name=scnexus-front --format 'table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}'
+COUNT=$(docker exec scnexus-front grep -c 'promocion-sobres-api' /etc/nginx/conf.d/default.conf || true)
 echo "location promocion-sobres-api en nginx: ${COUNT} (debe ser >= 1)"
 
 echo "==> Proxy promoción sobres (debe ser JSON o 401, no text/html)"

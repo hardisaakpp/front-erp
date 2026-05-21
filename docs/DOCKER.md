@@ -31,7 +31,7 @@ cp .env.docker.example .env
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
-docker compose -f docker-compose.dev.yml logs -f scnexus-front-dev
+docker compose -f docker-compose.dev.yml logs -f scnexus-front
 ```
 
 Con **mba3-consultas** en Docker (red `mba3-nexus_edge`):

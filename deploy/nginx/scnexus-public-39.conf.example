@@ -15,7 +15,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/codigoqr.mabelgroup.com.ec/privkey.pem;
 
     # Opcion A: servir dist directamente en host
-    # root /storage/scnexus-front-public/dist;
+    # root /storage/scnexus-front/dist;
     # index index.html;
 
     # QR legado PHP: excluir del proxy a la SPA (ajustar root/php-fpm segun el servidor).

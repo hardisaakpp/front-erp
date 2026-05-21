@@ -3,7 +3,7 @@
 #   docker compose -f docker-compose.dev.yml -f docker-compose.mba3-network.attach.yml up -d
 #   VITE_MBA3_PROXY_TARGET=http://mba3-api:8000 en .env
 services:
-  scnexus-front-dev:
+  scnexus-front:
     environment:
       VITE_MBA3_PROXY_TARGET: ${VITE_MBA3_PROXY_TARGET:-http://mba3-api:8000}
       VITE_AUTH_ME_PROXY_TARGET: ${VITE_AUTH_ME_PROXY_TARGET:-http://mba3-api:8000}

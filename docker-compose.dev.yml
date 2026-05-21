@@ -1,11 +1,12 @@
+# Desarrollo: Vite en :3000. Mismo nombre de contenedor que prod (scnexus-front); no correr ambos a la vez.
+# Proyecto compose distinto (scnexus-front-dev) solo para aislar volúmenes/redes de docker-compose.yml.
+# Con MBA3 en Docker: docker compose -f docker-compose.dev.yml -f docker-compose.mba3-network.attach.yml up -d
 name: scnexus-front-dev
 
-# Desarrollo: Vite en :3000 con proxy (sin Nginx). No usar :8081 para probar APIs en dev.
-# Con MBA3 en Docker: docker compose -f docker-compose.dev.yml -f docker-compose.mba3-network.attach.yml up -d
 services:
-  scnexus-front-dev:
+  scnexus-front:
     image: node:20-alpine
-    container_name: scnexus-front-dev
+    container_name: scnexus-front
     working_dir: /app
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 3000"
     environment:
