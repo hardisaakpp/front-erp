@@ -12,7 +12,7 @@
 #   chmod +x ~/deploys/nexus_frontend_prod.sh
 #
 # Uso:
-#   sh ~/deploys/nexus_frontend_prod.sh
+#   bash ~/deploys/nexus_frontend_prod.sh
 
 set -euo pipefail
 
@@ -50,11 +50,22 @@ echo "Build y levantar scnexus-front (Nginx en host :${FRONT_PORT})..."
 mkdir -p "$(dirname "$LOG_FILE")"
 {
   echo "=== $(date -Iseconds) prod deploy branch=$BRANCH port=$FRONT_PORT ==="
+
+  # Garantizar que las redes externas existen antes del compose (idempotente).
+  docker network create cajachica_net 2>/dev/null || true
+
   docker compose "${COMPOSE_FILES[@]}" --env-file "$ACTIVE_ENV" up -d --build
   docker image prune -f
 
-  # cajachica_net: declarada en docker-compose.prod-network.yml, se conecta automáticamente al hacer up.
+  # Garantizar conexiones a cajachica_net tras recrear el contenedor.
+  # docker compose las aplica si la red existe, pero este paso cubre casos de recreación manual
+  # o cuando la red fue creada después del último deploy.
+  docker network connect cajachica_net cajachica   2>/dev/null || true
+  docker network connect cajachica_net scnexus-front 2>/dev/null || true
+
   docker ps --filter name=scnexus-front --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+  echo "Red cajachica_net:"
+  docker network inspect cajachica_net --format '{{range .Containers}}  {{.Name}}{{"\n"}}{{end}}'
 } 2>&1 | tee -a "$LOG_FILE"
 
 echo "Front Docker listo."
